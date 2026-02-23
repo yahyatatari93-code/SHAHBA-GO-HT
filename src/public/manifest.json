@@ -1,8 +1,7 @@
 {
-  "name": "Shahba Go - HT",
+  "name": "Shahba Go",
   "short_name": "شهباء Go",
-  "description": "رفيقك الأول في حلب لكل خدمات السياحة والتنقل",
-  "start_url": "/?mode=standalone",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#0B192C",
   "theme_color": "#0B192C",
@@ -10,14 +9,12 @@
     {
       "src": "https://cdn-icons-png.flaticon.com/512/814/814513.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     },
     {
       "src": "https://cdn-icons-png.flaticon.com/512/814/814513.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     }
   ]
 }
