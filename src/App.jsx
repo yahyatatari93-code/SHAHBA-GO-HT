@@ -18,7 +18,7 @@ import {
   UserCheck, UserX, ClipboardList, Trash2,
   RotateCcw, Baby, Tent, Ship,
   PartyPopper, Plane, FileText, Globe,
-  Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock, Download
+  Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock, Download, Share, MoreVertical
 } from 'lucide-react';
 
 // 1. مفاتيح قاعدة البيانات الحقيقية الخاصة بشركة HT (Shahba Go)
@@ -120,9 +120,11 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // PWA Install State
+  // PWA Install State (Smart Banner)
   const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [isInstallable, setIsInstallable] = useState(false);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [showManualInstallDialog, setShowManualInstallDialog] = useState(false);
+  const [deviceType, setDeviceType] = useState('unknown');
 
   const [allOrders, setAllOrders] = useState([]);
   const [userOrders, setUserOrders] = useState([]);
@@ -131,14 +133,13 @@ export default function App() {
   const [rejectModal, setRejectModal] = useState(null); 
   const [showSuccessCard, setShowSuccessCard] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('office'); 
-  const [lang, setLang] = useState('ar');
 
   // Wallet State
   const [userPoints, setUserPoints] = useState(250); 
   const [redeemSuccess, setRedeemSuccess] = useState(null);
 
   useEffect(() => {
-    // إعدادات الشاشة لتبدو كتطبيق حقيقي (منع التقريب وإخفاء الحواف)
+    // إعدادات الشاشة لتبدو كتطبيق حقيقي
     let viewportMeta = document.querySelector('meta[name="viewport"]');
     if (!viewportMeta) {
       viewportMeta = document.createElement('meta');
@@ -155,11 +156,26 @@ export default function App() {
     }
     themeMeta.content = '#0B192C';
 
-    // التقاط حدث التثبيت للتطبيق (PWA)
+    // تحديد نوع الجهاز لمعرفة كيف نعرض طريقة التثبيت
+    const ua = navigator.userAgent || navigator.vendor || window.opera;
+    if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) {
+      setDeviceType('ios');
+    } else if (/android/i.test(ua)) {
+      setDeviceType('android');
+    }
+
+    // التحقق مما إذا كان التطبيق مثبتاً بالفعل (Standalone)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    const isBannerDismissed = localStorage.getItem('ht_install_dismissed');
+
+    if (!isStandalone && !isBannerDismissed) {
+       setShowInstallBanner(true);
+    }
+
+    // التقاط حدث التثبيت التلقائي (يعمل فقط على أندرويد إذا كان الـ manifest موجوداً)
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setIsInstallable(true);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -182,13 +198,22 @@ export default function App() {
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
+      // إذا كان الجهاز يدعم التثبيت التلقائي (مثل أندرويد الجاهز)
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
-        setIsInstallable(false);
+        setShowInstallBanner(false);
       }
       setDeferredPrompt(null);
+    } else {
+      // إذا لم يكن التثبيت التلقائي متاحاً (مثل آيفون أو أندرويد يفتقد ملفات)
+      setShowManualInstallDialog(true);
     }
+  };
+
+  const dismissInstallBanner = () => {
+     setShowInstallBanner(false);
+     localStorage.setItem('ht_install_dismissed', 'true');
   };
 
   useEffect(() => {
@@ -436,14 +461,63 @@ export default function App() {
         </div>
       </div>
 
-      {/* PWA Install Banner */}
-      {isInstallable && (
-        <div className="bg-emerald-600 p-3 flex justify-between items-center z-40 text-white shadow-md animate-in slide-in-from-top-4">
-           <div className="flex items-center gap-2">
-              <Download size={18} className="animate-bounce" />
-              <span className="text-[10px] font-bold">حمل التطبيق للحصول على أفضل تجربة!</span>
+      {/* SMART PWA Install Banner */}
+      {showInstallBanner && (
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-3 flex justify-between items-center z-40 text-white shadow-md animate-in slide-in-from-top-4 relative">
+           <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-1.5 rounded-lg animate-pulse">
+                 <Download size={18} />
+              </div>
+              <div className="flex flex-col">
+                  <span className="text-[11px] font-black">تطبيق شهباء Go متاح الآن!</span>
+                  <span className="text-[9px] text-emerald-100 font-bold">أضفه لشاشتك للحصول على أسرع حجز</span>
+              </div>
            </div>
-           <button onClick={handleInstallClick} className="bg-[#0B192C] text-emerald-400 px-4 py-2 rounded-xl text-[10px] font-black shadow-sm active:scale-95 transition-all">تثبيت الآن</button>
+           <div className="flex items-center gap-2">
+               <button onClick={handleInstallClick} className="bg-[#0B192C] text-emerald-400 px-4 py-2 rounded-xl text-[10px] font-black shadow-lg active:scale-95 transition-all">تثبيت</button>
+               <button onClick={dismissInstallBanner} className="text-emerald-100 hover:text-white p-1"><X size={16}/></button>
+           </div>
+        </div>
+      )}
+
+      {/* Manual Install Instruction Modal */}
+      {showManualInstallDialog && (
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[4000] flex items-center justify-center p-4">
+           <div className="bg-[#112240] w-full max-w-sm p-8 rounded-[3rem] border border-emerald-500/30 shadow-2xl relative text-center">
+              <button onClick={() => setShowManualInstallDialog(false)} className="absolute top-6 left-6 text-white/30 hover:text-white"><X size={20}/></button>
+              
+              <div className="flex justify-center mb-6"><HTLogo size="large" /></div>
+              <h2 className="text-xl font-black text-white mb-2">أضف التطبيق لشاشتك!</h2>
+              <p className="text-xs text-white/60 mb-6 leading-relaxed">لتحصل على تجربة سريعة وبدون متصفح، قم بإضافة التطبيق يدوياً بخطوتين فقط:</p>
+              
+              <div className="bg-[#0B192C] border border-white/10 rounded-2xl p-5 mb-6 text-right space-y-4">
+                 {deviceType === 'ios' ? (
+                     <>
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-blue-500/20 text-blue-400 rounded-lg flex items-center justify-center shrink-0"><Share size={16}/></div>
+                            <p className="text-[11px] font-bold text-white">1. اضغط على أيقونة <span className="text-blue-400">المشاركة (Share)</span> أسفل الشاشة.</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-emerald-500/20 text-emerald-400 rounded-lg flex items-center justify-center shrink-0"><Plus size={16}/></div>
+                            <p className="text-[11px] font-bold text-white">2. اختر <span className="text-emerald-400">إضافة إلى الصفحة الرئيسية (Add to Home Screen)</span>.</p>
+                        </div>
+                     </>
+                 ) : (
+                     <>
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-blue-500/20 text-blue-400 rounded-lg flex items-center justify-center shrink-0"><MoreVertical size={16}/></div>
+                            <p className="text-[11px] font-bold text-white">1. اضغط على <span className="text-blue-400">النقاط الثلاث</span> في أعلى المتصفح.</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-emerald-500/20 text-emerald-400 rounded-lg flex items-center justify-center shrink-0"><Download size={16}/></div>
+                            <p className="text-[11px] font-bold text-white">2. اختر <span className="text-emerald-400">تثبيت التطبيق (Install App)</span> أو إضافة للشاشة.</p>
+                        </div>
+                     </>
+                 )}
+              </div>
+              
+              <button onClick={() => setShowManualInstallDialog(false)} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg shadow-emerald-500/20 active:scale-95">فهمت ذلك</button>
+           </div>
         </div>
       )}
 
