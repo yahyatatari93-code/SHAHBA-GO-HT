@@ -1,7 +1,11 @@
 self.addEventListener('install', (e) => {
-  console.log('[Service Worker] تم التثبيت بنجاح');
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(clients.claim());
 });
 
 self.addEventListener('fetch', (e) => {
-  // هذا السطر إلزامي لكي يعترف جوجل كروم بأن هذا تطبيق حقيقي
+  e.respondWith(fetch(e.request).catch(() => new Response('Offline')));
 });
