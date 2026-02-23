@@ -7,5 +7,9 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  e.respondWith(fetch(e.request).catch(() => new Response('Offline')));
+  e.respondWith(
+    fetch(e.request).catch(() => {
+      return new Response('تطبيق شهباء Go يحتاج للاتصال بالإنترنت.');
+    })
+  );
 });
