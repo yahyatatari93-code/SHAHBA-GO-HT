@@ -1,9 +1,11 @@
 {
   "name": "Shahba Go",
   "short_name": "شهباء Go",
-  "description": "رفيقك الأول في حلب لكل خدمات السياحة والتنقل",
-  "start_url": ".",
+  "description": "تطبيق شركة HT لخدمات الباصات والسيارات والسياحة",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#0B192C",
   "theme_color": "#0B192C",
   "icons": [
