@@ -18,7 +18,7 @@ import {
   UserCheck, UserX, ClipboardList, Trash2,
   RotateCcw, Baby, Tent, Ship,
   PartyPopper, Plane, FileText, Globe,
-  Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock
+  Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock, Download
 } from 'lucide-react';
 
 // 1. مفاتيح قاعدة البيانات الحقيقية الخاصة بشركة HT (Shahba Go)
@@ -115,10 +115,14 @@ export default function App() {
   const [orderFilter, setOrderFilter] = useState('all'); 
 
   // Auth State
-  const [authModal, setAuthModal] = useState(null); // 'login' | 'signup' | null
+  const [authModal, setAuthModal] = useState(null); 
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authError, setAuthError] = useState('');
+
+  // PWA Install State
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isInstallable, setIsInstallable] = useState(false);
 
   const [allOrders, setAllOrders] = useState([]);
   const [userOrders, setUserOrders] = useState([]);
@@ -134,17 +138,58 @@ export default function App() {
   const [redeemSuccess, setRedeemSuccess] = useState(null);
 
   useEffect(() => {
+    // إعدادات الشاشة لتبدو كتطبيق حقيقي (منع التقريب وإخفاء الحواف)
+    let viewportMeta = document.querySelector('meta[name="viewport"]');
+    if (!viewportMeta) {
+      viewportMeta = document.createElement('meta');
+      viewportMeta.name = 'viewport';
+      document.head.appendChild(viewportMeta);
+    }
+    viewportMeta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+
+    let themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (!themeMeta) {
+      themeMeta = document.createElement('meta');
+      themeMeta.name = 'theme-color';
+      document.head.appendChild(themeMeta);
+    }
+    themeMeta.content = '#0B192C';
+
+    // التقاط حدث التثبيت للتطبيق (PWA)
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
     const timer = setTimeout(() => setShowSplash(false), 2500); 
     const initAuth = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
          setUser(currentUser);
       } else {
-         // إذا لم يكن مسجلاً، ادخل كضيف بشكل مخفي لتسهيل التصفح
          try { await signInAnonymously(auth); } catch (err) { console.error("Auth error:", err); }
       }
     });
-    return () => { clearTimeout(timer); initAuth(); };
+
+    return () => { 
+        clearTimeout(timer); 
+        initAuth(); 
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
   }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setIsInstallable(false);
+      }
+      setDeferredPrompt(null);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -390,6 +435,17 @@ export default function App() {
             ))}
         </div>
       </div>
+
+      {/* PWA Install Banner */}
+      {isInstallable && (
+        <div className="bg-emerald-600 p-3 flex justify-between items-center z-40 text-white shadow-md animate-in slide-in-from-top-4">
+           <div className="flex items-center gap-2">
+              <Download size={18} className="animate-bounce" />
+              <span className="text-[10px] font-bold">حمل التطبيق للحصول على أفضل تجربة!</span>
+           </div>
+           <button onClick={handleInstallClick} className="bg-[#0B192C] text-emerald-400 px-4 py-2 rounded-xl text-[10px] font-black shadow-sm active:scale-95 transition-all">تثبيت الآن</button>
+        </div>
+      )}
 
       {/* Header */}
       <header className="p-5 sticky top-10 z-50 bg-[#0B192C]/95 backdrop-blur-xl border-b border-white/5 flex justify-between items-center shadow-xl">
