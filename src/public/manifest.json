@@ -1,6 +1,7 @@
 {
   "name": "Shahba Go",
-  "short_name": "شهباء Go",
+  "short_name": "شهبا Go",
+  "description": "رفيقك الأول في حلب لكل خدمات السياحة والتنقل",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0B192C",
