@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, addDoc, onSnapshot, 
@@ -18,10 +18,10 @@ import {
   UserCheck, UserX, ClipboardList, Trash2,
   RotateCcw, Baby, Tent, Ship,
   PartyPopper, Plane, FileText, Globe,
-  Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock, Download, Share, MoreVertical
+  Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock, Download, Share, MoreVertical, BellRing, CheckCircle
 } from 'lucide-react';
 
-// 1. مفاتيح قاعدة البيانات الحقيقية الخاصة بشركة HT (Shahba Go)
+// === مفاتيح قاعدة البيانات الثابتة ===
 const firebaseConfig = {
   apiKey: "AIzaSyD0iCt_GXhp5sOfAH_C4GYnRQ69JijXd1Q",
   authDomain: "shahba-go-ht.firebaseapp.com",
@@ -35,7 +35,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = 'shahba-go-ht'; // مسار البيانات في السحابة
+const appId = 'shahba-go-ht';
 
 // --- HT Custom Logo Component ---
 const HTLogo = ({ size = "normal" }) => {
@@ -114,17 +114,10 @@ export default function App() {
   const [adminTab, setAdminTab] = useState('orders'); 
   const [orderFilter, setOrderFilter] = useState('all'); 
 
-  // Auth State
   const [authModal, setAuthModal] = useState(null); 
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authError, setAuthError] = useState('');
-
-  // PWA Install State (Smart Banner)
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [showInstallBanner, setShowInstallBanner] = useState(false);
-  const [showManualInstallDialog, setShowManualInstallDialog] = useState(false);
-  const [deviceType, setDeviceType] = useState('unknown');
 
   const [allOrders, setAllOrders] = useState([]);
   const [userOrders, setUserOrders] = useState([]);
@@ -134,12 +127,28 @@ export default function App() {
   const [showSuccessCard, setShowSuccessCard] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('office'); 
 
-  // Wallet State
   const [userPoints, setUserPoints] = useState(250); 
   const [redeemSuccess, setRedeemSuccess] = useState(null);
 
+  // --- نظام الإشعارات (Toasts) ---
+  const [toasts, setToasts] = useState([]);
+  const addToast = (msg, type = 'info', title = '') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, msg, type, title }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 6000);
+  };
+
+  const isFirstOrdersLoad = useRef(true);
+  const isFirstEventsLoad = useRef(true);
+  const isAdminRef = useRef(isAdmin);
+
   useEffect(() => {
-    // إعدادات الشاشة لتبدو كتطبيق حقيقي
+    isAdminRef.current = isAdmin;
+  }, [isAdmin]);
+
+  useEffect(() => {
     let viewportMeta = document.querySelector('meta[name="viewport"]');
     if (!viewportMeta) {
       viewportMeta = document.createElement('meta');
@@ -156,65 +165,19 @@ export default function App() {
     }
     themeMeta.content = '#0B192C';
 
-    // تحديد نوع الجهاز لمعرفة كيف نعرض طريقة التثبيت
-    const ua = navigator.userAgent || navigator.vendor || window.opera;
-    if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) {
-      setDeviceType('ios');
-    } else if (/android/i.test(ua)) {
-      setDeviceType('android');
-    }
-
-    // التحقق مما إذا كان التطبيق مثبتاً بالفعل (Standalone)
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-    const isBannerDismissed = localStorage.getItem('ht_install_dismissed');
-
-    if (!isStandalone && !isBannerDismissed) {
-       setShowInstallBanner(true);
-    }
-
-    // التقاط حدث التثبيت التلقائي (يعمل فقط على أندرويد إذا كان الـ manifest موجوداً)
-    const handleBeforeInstallPrompt = (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
     const timer = setTimeout(() => setShowSplash(false), 2500); 
-    const initAuth = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-         setUser(currentUser);
-      } else {
-         try { await signInAnonymously(auth); } catch (err) { console.error("Auth error:", err); }
-      }
+    
+    const initAuth = async () => {
+      try { await signInAnonymously(auth); } catch (err) { console.error("Auth error:", err); }
+    };
+    initAuth();
+    
+    const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) setUser(currentUser);
     });
 
-    return () => { 
-        clearTimeout(timer); 
-        initAuth(); 
-        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
+    return () => { clearTimeout(timer); unsubAuth(); };
   }, []);
-
-  const handleInstallClick = async () => {
-    if (deferredPrompt) {
-      // إذا كان الجهاز يدعم التثبيت التلقائي (مثل أندرويد الجاهز)
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        setShowInstallBanner(false);
-      }
-      setDeferredPrompt(null);
-    } else {
-      // إذا لم يكن التثبيت التلقائي متاحاً (مثل آيفون أو أندرويد يفتقد ملفات)
-      setShowManualInstallDialog(true);
-    }
-  };
-
-  const dismissInstallBanner = () => {
-     setShowInstallBanner(false);
-     localStorage.setItem('ht_install_dismissed', 'true');
-  };
 
   useEffect(() => {
     if (!user) return;
@@ -224,17 +187,42 @@ export default function App() {
       setAllOrders(docs);
       const phone = localStorage.getItem('sh-user-phone');
       setUserOrders(docs.filter(o => o.phone === phone || o.userId === user.uid));
+
+      if (!isFirstOrdersLoad.current) {
+        snap.docChanges().forEach(change => {
+          const data = change.doc.data();
+          if (change.type === 'added') {
+             if (isAdminRef.current) addToast(`طلب حجز جديد من: ${data.name}`, 'info', 'طلب جديد 🔔');
+          }
+          if (change.type === 'modified') {
+             if (!isAdminRef.current && (data.phone === phone || data.userId === user.uid)) {
+                if (data.status === 'approved') addToast(`تمت الموافقة على طلبك: ${data.serviceTitle} بنجاح!`, 'success', 'موافقة ✔️');
+                if (data.status === 'rejected') addToast(`عذراً، تم رفض طلبك: ${data.serviceTitle} (السبب: ${data.rejectionReason})`, 'error', 'تحديث الطلب ❌');
+             }
+          }
+        });
+      }
+      isFirstOrdersLoad.current = false;
     }, (err) => console.error(err));
 
     const qEvents = query(collection(db, 'artifacts', appId, 'public', 'data', 'marketing_events'), orderBy('createdAt', 'desc'));
     const unsubEvents = onSnapshot(qEvents, (snap) => {
       setDynamicEvents(snap.docs.map(d => ({id: d.id, ...d.data()})));
+      
+      if (!isFirstEventsLoad.current) {
+        snap.docChanges().forEach(change => {
+           if (change.type === 'added') {
+              const data = change.doc.data();
+              addToast(`${data.name} ${data.price ? `- ${data.price}` : ''}`, 'special', 'فعالية جديدة متاحة الآن! 🚀');
+           }
+        });
+      }
+      isFirstEventsLoad.current = false;
     }, (err) => console.error(err));
 
     return () => { unsubOrders(); unsubEvents(); };
   }, [user]);
 
-  // Auth Handlers
   const handleAuthSubmit = async (e) => {
       e.preventDefault();
       setAuthError('');
@@ -263,17 +251,6 @@ export default function App() {
     if (!user) return;
     const formData = new FormData(e.target);
     const formValues = Object.fromEntries(formData.entries());
-
-    const numberFields = ['paxCount', 'workerCount', 'busCount', 'nightCount'];
-    for (let field of numberFields) {
-       if (formValues[field] !== undefined && formValues[field] !== "") {
-           const val = parseInt(formValues[field]);
-           if (isNaN(val) || val <= 0) {
-               alert("عذراً، يجب أن يكون العدد المدخل أكبر من صفر لضمان صحة الطلب.");
-               return;
-           }
-       }
-    }
 
     localStorage.setItem('sh-user-name', formValues.name);
     localStorage.setItem('sh-user-phone', formValues.phone);
@@ -306,7 +283,7 @@ export default function App() {
     } else {
        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'orders'), { ...orderData, createdAt: serverTimestamp() });
        if (!user.isAnonymous) {
-           setUserPoints(prev => prev + 25); // مكافأة للمسجلين فقط
+           setUserPoints(prev => prev + 25);
        }
     }
     
@@ -336,7 +313,7 @@ export default function App() {
               });
 
               setUserPoints(prev => prev - reward.points);
-              setRedeemSuccess(`مبروك! تم إرسال طلب استبدال (${reward.name}) للإدارة. تابعه من قسم طلباتي لتستلمه قريباً.`);
+              setRedeemSuccess(`مبروك! تم إرسال طلب استبدال (${reward.name}).`);
               setTimeout(() => setRedeemSuccess(null), 6000);
           } catch (error) {
               console.error(error);
@@ -383,15 +360,15 @@ export default function App() {
   };
 
   const renderOrderInfo = (order) => {
-    if (order.serviceType === 'reward') return `طلب استبدال هدية (${order.pointsUsed} نقطة) - بانتظار تأكيد التسليم.`;
-    if (order.serviceType === 'car') return `المدة: ${order.rentDuration} | السائق: ${order.driverOption === 'with_driver' ? 'مع سائق' : 'بدون'}`;
-    if (order.serviceType === 'hotel') return `${order.checkIn} لغاية ${order.checkOut} (${order.nightCount} ليلة) | أشخاص: ${order.paxCount}`;
+    if (order.serviceType === 'reward') return `استبدال هدية (${order.pointsUsed} نقطة)`;
+    if (order.serviceType === 'car') return `المدة: ${order.rentDuration === 'daily' ? 'يومي' : order.rentDuration === 'weekly' ? 'أسبوعي' : 'شهري'} | السائق: ${order.driverOption === 'with_driver' ? 'مع سائق' : 'بدون'}`;
+    if (order.serviceType === 'hotel') return `${order.checkIn} لغاية ${order.checkOut} (${order.nightCount} ليلة)`;
     if (order.serviceType === 'bus' && order.busSubCategory === 'contract') return `${order.orgName} | باصات: ${order.busCount}`;
-    if (order.serviceType === 'bus') return `ترفيهي: ${order.tripDate} - ${order.tripTime}`;
+    if (order.serviceType === 'bus') return `ترفيهي: ${order.tripDate}`;
     if (order.serviceType === 'flights') return `من ${order.fromAirport} لـ ${order.toAirport} بتاريخ ${order.flightDate}`;
-    if (order.serviceType === 'transit') return `من ${order.fromLocation} إلى ${order.toLocation} | ${order.transitType} | سيارة: ${order.carTypePreference}`;
-    if (order.serviceType === 'services') return `التفاصيل: ${order.serviceDetails || ''}`;
-    if (order.serviceType === 'events') return `عدد: ${order.paxCount} | أطفال: ${order.hasKids === 'yes' ? 'نعم' : 'لا'}`;
+    if (order.serviceType === 'transit') return `من ${order.fromLocation} إلى ${order.toLocation}`;
+    if (order.serviceType === 'services') return `الخدمة المطلوبة مسجلة`;
+    if (order.serviceType === 'events') return `عدد: ${order.paxCount}`;
     return 'تفاصيل عامة';
   };
 
@@ -403,16 +380,6 @@ export default function App() {
       return filtered;
   };
 
-  const safeFormatDate = (timestamp) => {
-    if (!timestamp) return 'قيد المعالجة';
-    if (typeof timestamp.toDate === 'function') {
-      return timestamp.toDate().toLocaleDateString();
-    }
-    return 'قيد المعالجة';
-  };
-
-  const openWhatsApp = () => window.open("https://wa.me/9639xxxxxxxx", "_blank");
-
   const StatusBadge = ({ status }) => {
     const styles = {
       pending: 'bg-amber-500/20 text-amber-500 border-amber-500/30',
@@ -423,6 +390,31 @@ export default function App() {
     return <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border ${styles[status]}`}>{labels[status]}</span>;
   };
 
+  const ToastContainer = () => (
+    <div className="fixed top-4 left-0 right-0 z-[6000] flex flex-col items-center gap-2 pointer-events-none px-4">
+      {toasts.map(toast => {
+        let styles = '';
+        let Icon = BellRing;
+        if (toast.type === 'success') { styles = 'bg-emerald-500 text-black border-emerald-400'; Icon = CheckCircle2; }
+        else if (toast.type === 'error') { styles = 'bg-rose-600 text-white border-rose-500'; Icon = AlertCircle; }
+        else if (toast.type === 'info') { styles = 'bg-[#112240] text-emerald-400 border-emerald-500/30'; }
+        else if (toast.type === 'special') { styles = 'bg-gradient-to-r from-amber-500 to-yellow-600 text-black border-yellow-300 shadow-[0_0_20px_rgba(245,158,11,0.4)]'; Icon = Sparkles; }
+
+        return (
+          <div key={toast.id} className={`max-w-sm w-full p-4 rounded-2xl shadow-2xl border flex items-center gap-4 animate-in slide-in-from-top-10 fade-in duration-300 pointer-events-auto ${styles}`}>
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+               <Icon size={20} />
+            </div>
+            <div className="flex-1 text-right">
+               {toast.title && <h4 className="font-black text-[11px] mb-0.5">{toast.title}</h4>}
+               <p className="text-[10px] font-bold leading-relaxed">{toast.msg}</p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   if (showSplash) {
     return (
       <div className="fixed inset-0 bg-[#0B192C] flex flex-col items-center justify-center z-[2000]">
@@ -432,13 +424,6 @@ export default function App() {
         </div>
         <h1 className="text-5xl font-black text-white italic tracking-tighter text-center leading-none uppercase mb-2 drop-shadow-lg">شهباء <span className="text-emerald-400">Go</span></h1>
         <p className="text-emerald-400 font-bold text-sm mb-8 tracking-widest uppercase opacity-80">هدفنا راحتك</p>
-        <div className="flex gap-5 items-center">
-           <span className="text-white/80 font-black text-sm uppercase tracking-widest animate-bounce [animation-delay:-0.3s]">كفالة</span>
-           <div className="w-1 h-6 bg-emerald-500/50 rounded-full"></div>
-           <span className="text-white/80 font-black text-sm uppercase tracking-widest animate-bounce [animation-delay:-0.15s]">متعة</span>
-           <div className="w-1 h-6 bg-emerald-500/50 rounded-full"></div>
-           <span className="text-white/80 font-black text-sm uppercase tracking-widest animate-bounce">رفاهية</span>
-        </div>
       </div>
     );
   }
@@ -446,6 +431,8 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#0B192C] text-white font-sans overflow-x-hidden pb-32" dir="rtl">
       
+      <ToastContainer />
+
       {/* Ticker Banner */}
       <div className="bg-emerald-500/10 border-b border-emerald-500/20 py-2.5 overflow-hidden whitespace-nowrap sticky top-0 z-40 backdrop-blur-md">
         <div className="flex animate-marquee space-x-12 space-x-reverse items-center">
@@ -461,69 +448,9 @@ export default function App() {
         </div>
       </div>
 
-      {/* SMART PWA Install Banner */}
-      {showInstallBanner && (
-        <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-3 flex justify-between items-center z-40 text-white shadow-md animate-in slide-in-from-top-4 relative">
-           <div className="flex items-center gap-3">
-              <div className="bg-white/20 p-1.5 rounded-lg animate-pulse">
-                 <Download size={18} />
-              </div>
-              <div className="flex flex-col">
-                  <span className="text-[11px] font-black">تطبيق شهباء Go متاح الآن!</span>
-                  <span className="text-[9px] text-emerald-100 font-bold">أضفه لشاشتك للحصول على أسرع حجز</span>
-              </div>
-           </div>
-           <div className="flex items-center gap-2">
-               <button onClick={handleInstallClick} className="bg-[#0B192C] text-emerald-400 px-4 py-2 rounded-xl text-[10px] font-black shadow-lg active:scale-95 transition-all">تثبيت</button>
-               <button onClick={dismissInstallBanner} className="text-emerald-100 hover:text-white p-1"><X size={16}/></button>
-           </div>
-        </div>
-      )}
-
-      {/* Manual Install Instruction Modal */}
-      {showManualInstallDialog && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[4000] flex items-center justify-center p-4">
-           <div className="bg-[#112240] w-full max-w-sm p-8 rounded-[3rem] border border-emerald-500/30 shadow-2xl relative text-center">
-              <button onClick={() => setShowManualInstallDialog(false)} className="absolute top-6 left-6 text-white/30 hover:text-white"><X size={20}/></button>
-              
-              <div className="flex justify-center mb-6"><HTLogo size="large" /></div>
-              <h2 className="text-xl font-black text-white mb-2">أضف التطبيق لشاشتك!</h2>
-              <p className="text-xs text-white/60 mb-6 leading-relaxed">لتحصل على تجربة سريعة وبدون متصفح، قم بإضافة التطبيق يدوياً بخطوتين فقط:</p>
-              
-              <div className="bg-[#0B192C] border border-white/10 rounded-2xl p-5 mb-6 text-right space-y-4">
-                 {deviceType === 'ios' ? (
-                     <>
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-blue-500/20 text-blue-400 rounded-lg flex items-center justify-center shrink-0"><Share size={16}/></div>
-                            <p className="text-[11px] font-bold text-white">1. اضغط على أيقونة <span className="text-blue-400">المشاركة (Share)</span> أسفل الشاشة.</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-emerald-500/20 text-emerald-400 rounded-lg flex items-center justify-center shrink-0"><Plus size={16}/></div>
-                            <p className="text-[11px] font-bold text-white">2. اختر <span className="text-emerald-400">إضافة إلى الصفحة الرئيسية (Add to Home Screen)</span>.</p>
-                        </div>
-                     </>
-                 ) : (
-                     <>
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-blue-500/20 text-blue-400 rounded-lg flex items-center justify-center shrink-0"><MoreVertical size={16}/></div>
-                            <p className="text-[11px] font-bold text-white">1. اضغط على <span className="text-blue-400">النقاط الثلاث</span> في أعلى المتصفح.</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-emerald-500/20 text-emerald-400 rounded-lg flex items-center justify-center shrink-0"><Download size={16}/></div>
-                            <p className="text-[11px] font-bold text-white">2. اختر <span className="text-emerald-400">تثبيت التطبيق (Install App)</span> أو إضافة للشاشة.</p>
-                        </div>
-                     </>
-                 )}
-              </div>
-              
-              <button onClick={() => setShowManualInstallDialog(false)} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg shadow-emerald-500/20 active:scale-95">فهمت ذلك</button>
-           </div>
-        </div>
-      )}
-
       {/* Header */}
       <header className="p-5 sticky top-10 z-50 bg-[#0B192C]/95 backdrop-blur-xl border-b border-white/5 flex justify-between items-center shadow-xl">
-        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => {setActiveView('main'); setIsAdmin(false); setSelectedCategory(null); setSelectedHotel(null); setSelectedCity(null); setSelectedBusType(null);}}>
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => {setActiveView('main'); setIsAdmin(false); setSelectedCategory(null); setSelectedHotel(null); setSelectedCity(null); setSelectedBusType(null);}}>
            <HTLogo />
            <div className="flex flex-col text-right">
                 <h1 className="text-lg font-black italic text-white leading-none">شهباء <span className="text-emerald-400">Go</span></h1>
@@ -537,19 +464,16 @@ export default function App() {
                     <span className="text-[10px] font-black">{user?.isAnonymous ? '0' : userPoints}</span>
                 </button>
             )}
-
-            {/* زر الإدارة أصبح ظاهراً دائماً لسهولة التجريب */}
             <button onClick={() => setIsAdmin(!isAdmin)} className={`px-4 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border transition-all ${isAdmin ? 'bg-amber-500/10 text-amber-400 border-amber-500/50' : 'bg-white/5 border-white/10 text-slate-300'}`}>
                {isAdmin ? <LayoutGrid size={14} /> : <Settings size={14}/>}
                {isAdmin ? 'المتجر' : 'الإدارة'}
             </button>
-
             {user?.isAnonymous ? (
-                <button onClick={() => setAuthModal('login')} className="px-3 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 transition-all">
+                <button onClick={() => setAuthModal('login')} className="px-3 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border border-white/10 bg-white/5 text-slate-300">
                     <LogIn size={14} /> دخول
                 </button>
             ) : (
-                <button onClick={handleLogout} className="p-2 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20">
+                <button onClick={handleLogout} className="p-2 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400">
                     <LogOut size={14} />
                 </button>
             )}
@@ -559,30 +483,17 @@ export default function App() {
       {/* Auth Modal */}
       {authModal && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[3000] flex items-center justify-center p-4">
-           <div className="bg-[#112240] w-full max-w-sm p-8 rounded-[3rem] border border-emerald-500/20 shadow-2xl relative animate-in zoom-in-95 text-center">
+           <div className="bg-[#112240] w-full max-w-sm p-8 rounded-[3rem] border border-emerald-500/20 shadow-2xl relative animate-in text-center">
               <button onClick={() => setAuthModal(null)} className="absolute top-6 left-6 text-white/30 hover:text-white"><X size={20}/></button>
               <div className="flex justify-center mb-6"><HTLogo size="large" /></div>
-              <h2 className="text-xl font-black text-white mb-2">{authModal === 'login' ? 'مرحباً بعودتك' : 'انضم لنادي النخبة HT'}</h2>
-              <p className="text-[10px] text-emerald-400 mb-6">سجل الآن لتبدأ بجمع النقاط والهدايا مع كل حجز.</p>
-              
-              {authError && <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 p-3 rounded-xl text-xs font-bold mb-4">{authError}</div>}
-              
+              <h2 className="text-xl font-black text-white mb-6">{authModal === 'login' ? 'تسجيل الدخول' : 'حساب جديد'}</h2>
+              {authError && <div className="bg-rose-500/10 text-rose-400 p-3 rounded-xl text-xs font-bold mb-4">{authError}</div>}
               <form onSubmit={handleAuthSubmit} className="space-y-4">
-                  <div className="relative">
-                      <Mail size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30" />
-                      <input type="email" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 pr-12 pl-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="البريد الإلكتروني" />
-                  </div>
-                  <div className="relative">
-                      <Lock size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30" />
-                      <input type="password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 pr-12 pl-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="كلمة المرور" />
-                  </div>
-                  <button type="submit" className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg shadow-emerald-500/20 active:scale-95 transition-all mt-2">
-                      {authModal === 'login' ? 'تسجيل الدخول' : 'إنشاء حساب جديد'}
-                  </button>
+                  <input type="email" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right" placeholder="البريد الإلكتروني" />
+                  <input type="password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right" placeholder="كلمة المرور" />
+                  <button type="submit" className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs">تأكيد</button>
               </form>
-              <button onClick={() => setAuthModal(authModal === 'login' ? 'signup' : 'login')} className="mt-6 text-[10px] text-white/40 hover:text-emerald-400 font-bold transition-colors">
-                  {authModal === 'login' ? 'ليس لديك حساب؟ أنشئ حسابك الآن' : 'لديك حساب بالفعل؟ سجل دخولك'}
-              </button>
+              <button onClick={() => setAuthModal(authModal === 'login' ? 'signup' : 'login')} className="mt-6 text-[10px] text-white/40">تبديل العملية</button>
            </div>
         </div>
       )}
@@ -590,138 +501,93 @@ export default function App() {
       <main className="p-4 max-w-5xl mx-auto">
         {isAdmin ? (
           /* ADMIN VIEW */
-          <div className="space-y-6 animate-in fade-in">
-             <div className="flex items-center justify-between px-2">
-                <h2 className="text-sm font-black text-emerald-400 uppercase tracking-tighter flex items-center gap-2"><HTLogo size="small" className="w-6 h-6 text-[10px]"/> لوحة الإدارة الشاملة</h2>
-             </div>
-
-             <div className="flex bg-[#0F172A] p-1.5 rounded-2xl border border-white/5 shadow-xl mb-4">
-                <button onClick={() => setAdminTab('orders')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-bold transition-all ${adminTab === 'orders' ? 'bg-white/10 text-white' : 'text-slate-500'}`}>
-                   <ClipboardList size={14}/> إدارة الطلبات
-                </button>
-                <button onClick={() => setAdminTab('marketing')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-bold transition-all ${adminTab === 'marketing' ? 'bg-white/10 text-white' : 'text-slate-500'}`}>
-                   <Megaphone size={14}/> إدارة الإعلانات
-                </button>
+          <div className="space-y-6 animate-in">
+             <div className="flex bg-[#0F172A] p-1.5 rounded-2xl border border-white/5 mb-4">
+                <button onClick={() => setAdminTab('orders')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-bold ${adminTab === 'orders' ? 'bg-white/10 text-white' : 'text-slate-500'}`}>الطلبات</button>
+                <button onClick={() => setAdminTab('marketing')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-bold ${adminTab === 'marketing' ? 'bg-white/10 text-white' : 'text-slate-500'}`}>الإعلانات</button>
              </div>
 
              {adminTab === 'orders' ? (
                <div className="space-y-6">
-                 {/* Admin Filters */}
                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide px-2">
                      {[
-                         { id: 'all', label: 'كافة الطلبات', icon: ClipboardList },
-                         { id: 'pending', label: 'قيد الانتظار', icon: Clock },
-                         { id: 'approved', label: 'المقبولة', icon: CheckCircle2 },
-                         { id: 'rejected', label: 'المرفوضة', icon: Trash2 },
-                     ].map(filter => (
-                         <button key={filter.id} onClick={() => setOrderFilter(filter.id)} className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black transition-all whitespace-nowrap ${orderFilter === filter.id ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'bg-white/5 text-white/50 hover:bg-white/10 border border-white/5'}`}>
-                            <filter.icon size={12}/> {filter.label}
-                         </button>
+                         { id: 'all', label: 'الكل' },
+                         { id: 'pending', label: 'قيد الانتظار' },
+                         { id: 'approved', label: 'مقبولة' },
+                         { id: 'rejected', label: 'مرفوضة' },
+                     ].map(f => (
+                         <button key={f.id} onClick={() => setOrderFilter(f.id)} className={`px-4 py-2 rounded-xl text-[10px] font-black ${orderFilter === f.id ? 'bg-emerald-500 text-black' : 'bg-white/5 text-white/50'}`}>{f.label}</button>
                      ))}
                  </div>
-
                  <div className="overflow-x-auto rounded-3xl border border-white/10 bg-[#112240] shadow-2xl">
                     <table className="w-full text-right text-[11px]">
                        <thead>
-                          <tr className="bg-white/5 text-white/40 border-b border-white/10">
+                          <tr className="bg-white/5 text-white/40">
                              <th className="p-4">الخدمة</th>
-                             <th className="p-4 text-right">العميل</th>
-                             <th className="p-4">التفاصيل الفنية</th>
-                             <th className="p-4">الدفع</th>
+                             <th className="p-4">العميل</th>
+                             <th className="p-4">التفاصيل</th>
                              <th className="p-4">الحالة</th>
-                             <th className="p-4 text-center font-black">القرار</th>
+                             <th className="p-4 text-center">القرار</th>
                           </tr>
                        </thead>
                        <tbody className="divide-y divide-white/5">
                           {filterOrdersByType(['bus', 'car', 'transit', 'hotel', 'events', 'flights', 'services', 'reward']).map(order => (
-                            <tr key={order.id} className="hover:bg-white/10 transition-colors">
+                            <tr key={order.id} className="hover:bg-white/10">
                                <td className="p-4 font-black text-emerald-400">{order.serviceTitle}</td>
                                <td className="p-4">
-                                  <div className="font-bold flex items-center gap-1">
-                                      {order.name} 
-                                      {!order.isGuest && order.serviceType !== 'reward' && <Sparkles size={10} className="text-amber-400"/>}
-                                  </div>
+                                  <div className="font-bold">{order.name}</div>
                                   <div className="text-[10px] text-white/40">{order.phone}</div>
                                </td>
-                               <td className="p-4 text-white/60">
-                                  {renderOrderInfo(order)}
-                               </td>
-                               <td className="p-4">
-                                  {order.serviceType === 'reward' ? (
-                                      <span className="px-2 py-0.5 rounded-lg border font-bold text-[9px] bg-purple-500/10 border-purple-500 text-purple-400">
-                                          مجاني (نقاط HT)
-                                      </span>
-                                  ) : (
-                                      <span className={`px-2 py-0.5 rounded-lg border font-bold text-[9px] ${order.paymentMethod === 'cham_cash' ? 'bg-indigo-500/10 border-indigo-500 text-indigo-400' : 'bg-emerald-500/10 border-emerald-500 text-emerald-400'}`}>
-                                          {order.paymentMethod === 'cham_cash' ? 'شام كاش' : 'المكتب'}
-                                      </span>
-                                  )}
-                               </td>
+                               <td className="p-4 text-white/60">{renderOrderInfo(order)}</td>
                                <td className="p-4"><StatusBadge status={order.status} /></td>
                                <td className="p-4 text-center">
                                   {order.status === 'pending' && (
                                     <div className="flex gap-2 justify-center">
-                                       <button onClick={() => updateOrderStatus(order.id, 'approved')} className="p-2 bg-emerald-500 text-black rounded-xl hover:scale-110 transition-transform"><CheckCircle2 size={14}/></button>
-                                       <button onClick={() => setRejectModal(order.id)} className="p-2 bg-rose-500 text-white rounded-xl hover:scale-110 transition-transform"><X size={14}/></button>
+                                       <button onClick={() => updateOrderStatus(order.id, 'approved')} className="p-2 bg-emerald-500 text-black rounded-xl"><CheckCircle2 size={14}/></button>
+                                       <button onClick={() => setRejectModal(order.id)} className="p-2 bg-rose-500 text-white rounded-xl"><X size={14}/></button>
                                     </div>
-                                  )}
-                                  {order.status === 'rejected' && (
-                                      <span className="text-[9px] text-rose-500 font-bold block max-w-[100px] overflow-hidden truncate" title={order.rejectionReason}>{order.rejectionReason}</span>
                                   )}
                                </td>
                             </tr>
                           ))}
-                          {filterOrdersByType(['bus', 'car', 'transit', 'hotel', 'events', 'flights', 'services', 'reward']).length === 0 && <tr><td colSpan="6" className="p-8 text-center text-white/20 italic">لا توجد طلبات متطابقة</td></tr>}
                        </tbody>
                     </table>
                  </div>
                </div>
              ) : (
-                /* ADMIN MARKETING FORM */
-                <div className="space-y-6 animate-in slide-in-from-right-4 max-w-xl mx-auto pb-10">
+                /* MARKETING FORM */
+                <div className="space-y-6 max-w-xl mx-auto">
                     <form onSubmit={addMarketingEvent} className="bg-[#112240] p-8 rounded-[3rem] border border-white/5 shadow-2xl">
-                        <h3 className="text-lg font-black text-white flex items-center gap-2 mb-6"><Megaphone className="text-emerald-500"/> إدراج إعلان جديد (رحلة أو عرض)</h3>
+                        <h3 className="text-lg font-black text-white mb-6">إدراج إعلان جديد</h3>
                         <div className="space-y-4">
-                           <input name="name" required className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-xs text-white text-right outline-none focus:border-emerald-500 shadow-inner" placeholder="العنوان (مثال: رحلة اللاذقية، أو سيارة جيب جديدة)" />
-                           <textarea name="desc" required className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-xs text-white text-right h-24 outline-none focus:border-emerald-500" placeholder="التفاصيل كاملة..."></textarea>
+                           <input name="name" required className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-xs text-white text-right" placeholder="العنوان" />
+                           <textarea name="desc" required className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-xs text-white text-right h-24" placeholder="التفاصيل كاملة..."></textarea>
                            <div className="grid grid-cols-2 gap-4">
-                               <input name="date" className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-[10px] text-white outline-none focus:border-emerald-500" placeholder="الموعد (اختياري)" />
-                               <input name="price" className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-[10px] text-white outline-none focus:border-emerald-500" placeholder="التكلفة (اختياري)" />
+                               <input name="date" className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-[10px] text-white" placeholder="الموعد" />
+                               <input name="price" className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-[10px] text-white" placeholder="التكلفة" />
                            </div>
-                           <select name="postType" required className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-xs text-white text-right outline-none focus:border-emerald-500 shadow-inner appearance-none">
-                               <option value="event">رحلة / فعالية (تظهر كبطاقة قابلة للحجز)</option>
-                               <option value="offer">عرض خاص / خبر جديد (يظهر بالشريط الإعلاني فقط)</option>
+                           <select name="postType" required className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-xs text-white text-right">
+                               <option value="event">رحلة / فعالية</option>
+                               <option value="offer">عرض إعلاني</option>
                            </select>
-                           <select name="iconType" className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-xs text-white text-right outline-none focus:border-emerald-500 shadow-inner appearance-none">
-                               <option value="party">أيقونة: سهرة / حفلة / عام</option>
-                               <option value="sea">أيقونة: رحلة بحرية / سفينة</option>
-                               <option value="tent">أيقونة: تخييم / طبيعة</option>
+                           <select name="iconType" className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-xs text-white text-right">
+                               <option value="party">سهرة / عام</option>
+                               <option value="sea">رحلة بحرية</option>
+                               <option value="tent">تخييم</option>
                            </select>
-                           <button type="submit" className="w-full bg-emerald-500 text-black py-5 rounded-[2rem] font-black text-xs shadow-lg active:scale-95 transition-all mt-2">نشر الإعلان للمستخدمين</button>
+                           <button type="submit" className="w-full bg-emerald-500 text-black py-5 rounded-[2rem] font-black text-xs mt-2">نشر</button>
                         </div>
                     </form>
                     <div className="space-y-3">
-                        <h4 className="text-[10px] text-emerald-500 font-black px-2">الإعلانات المنشورة حالياً:</h4>
-                        {dynamicEvents.map(ev => {
-                            const EventIcon = ev.iconType === 'sea' ? Ship : ev.iconType === 'tent' ? Tent : Music;
-                            return (
-                                <div key={ev.id} className="bg-[#112240] p-5 rounded-3xl border border-white/5 flex items-center gap-4 shadow-lg">
-                                    <div className="w-12 h-12 bg-rose-500/10 text-rose-500 rounded-2xl flex items-center justify-center shrink-0">
-                                        <EventIcon size={20}/>
-                                    </div>
-                                    <div className="flex-1 text-right">
-                                       <div className="font-black text-sm text-white flex items-center gap-2">
-                                           {ev.name}
-                                           <span className={`text-[8px] px-2 py-0.5 rounded ${ev.postType === 'offer' ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                                               {ev.postType === 'offer' ? 'عرض إعلاني' : 'رحلة'}
-                                           </span>
-                                       </div>
-                                       <div className="text-[10px] text-white/50 mt-1">{ev.date} {ev.price ? `• ${ev.price}` : ''}</div>
-                                    </div>
-                                    <button onClick={() => deleteMarketingEvent(ev.id)} className="text-rose-500/50 hover:text-rose-500 p-2 transition-colors bg-rose-500/10 rounded-xl"><Trash2 size={16}/></button>
+                        {dynamicEvents.map(ev => (
+                            <div key={ev.id} className="bg-[#112240] p-5 rounded-3xl border border-white/5 flex items-center justify-between">
+                                <div className="text-right">
+                                   <div className="font-black text-sm">{ev.name}</div>
+                                   <div className="text-[10px] text-white/50">{ev.date}</div>
                                 </div>
-                            )
-                        })}
+                                <button onClick={() => deleteMarketingEvent(ev.id)} className="text-rose-500/50 p-2"><Trash2 size={16}/></button>
+                            </div>
+                        ))}
                     </div>
                 </div>
              )}
@@ -730,61 +596,34 @@ export default function App() {
           /* USER VIEWS */
           <div className="space-y-6 pb-10">
             {activeView === 'main' && (
-              <div className="space-y-6 max-w-xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <div className="space-y-6 max-w-xl mx-auto animate-in">
+                
                 <div className="relative rounded-[3rem] overflow-hidden aspect-[16/9] border border-white/5 shadow-2xl">
-                   <img src="https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=800" className="w-full h-full object-cover opacity-50" alt="Travel Hero"/>
-                   <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-transparent"></div>
+                   <img src="https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800" className="w-full h-full object-cover opacity-50" alt="Aleppo Citadel"/>
+                   <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/30 to-transparent"></div>
                    <div className="absolute top-6 left-6"><HTLogo /></div>
                    <div className="absolute bottom-6 right-6 text-right">
-                      <h2 className="text-3xl font-black italic uppercase leading-none tracking-tighter">شهباء <span className="text-emerald-400">Go</span></h2>
-                      <p className="text-xs text-white/80 font-bold mt-2 leading-relaxed">
-                         نصلك أينما كنت، ونأخذك حيثما تريد.<br/>
-                         <span className="text-emerald-400">هدفنا راحتك دائماً.</span>
-                      </p>
+                      <h2 className="text-3xl font-black italic uppercase leading-none">شهباء <span className="text-emerald-400">Go</span></h2>
+                      <p className="text-xs text-white/80 font-bold mt-2">نصلك أينما كنت، ونأخذك حيثما تريد.</p>
                    </div>
                 </div>
 
-                {/* Marketing Banner for App Usage */}
-                <div onClick={() => !user?.isAnonymous ? setActiveView('wallet') : setAuthModal('signup')} className="bg-gradient-to-r from-emerald-900/40 to-[#112240] border border-emerald-500/20 p-5 rounded-[2rem] flex items-center gap-4 shadow-lg animate-in zoom-in-95 cursor-pointer hover:border-emerald-500/40 transition-colors">
-                   <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
-                      <Star size={24} fill="currentColor" className="opacity-80"/>
-                   </div>
+                <div onClick={() => !user?.isAnonymous ? setActiveView('wallet') : setAuthModal('signup')} className="bg-gradient-to-r from-emerald-900/40 to-[#112240] border border-emerald-500/20 p-5 rounded-[2rem] flex items-center gap-4 cursor-pointer">
+                   <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400"><Star size={24}/></div>
                    <div className="flex-1">
                       <h4 className="text-xs font-black text-emerald-400">انضم لنادي النخبة HT</h4>
-                      <p className="text-[9px] text-white/60 mt-1 leading-relaxed font-bold">احجز عبر التطبيق واحصل على <span className="text-white">نقاط وهدايا حصرية</span> لعملائنا المميزين.</p>
+                      <p className="text-[9px] text-white/60 mt-1">احجز عبر التطبيق واحصل على نقاط وهدايا.</p>
                    </div>
                 </div>
-
-                {/* Highlighted Events / Trips */}
-                {dynamicEvents.filter(ev => ev.postType !== 'offer').length > 0 && (
-                   <div className="space-y-3 animate-in fade-in">
-                      <h3 className="text-sm font-black text-emerald-400 px-2 flex items-center gap-2"><Sparkles size={16}/> رحلات قادمة لا تفوتها</h3>
-                      <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide px-2">
-                         {dynamicEvents.filter(ev => ev.postType !== 'offer').map(trip => (
-                            <div key={trip.id} onClick={() => { setSelectedCategory('events'); setBookingItem(trip); setActiveView('list'); }} className="min-w-[240px] bg-gradient-to-br from-[#112240] to-[#0B192C] p-5 rounded-[2.5rem] border border-white/5 shrink-0 shadow-xl cursor-pointer hover:border-emerald-500/50 transition-colors relative overflow-hidden group">
-                               <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/10 rounded-bl-[100%] transition-transform group-hover:scale-110"></div>
-                               <h4 className="text-sm font-black text-white relative z-10">{trip.name}</h4>
-                               <p className="text-[10px] text-white/50 mt-1 relative z-10">{trip.date}</p>
-                               <div className="mt-3 flex justify-between items-center relative z-10">
-                                  <span className="text-xs font-black text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl">{trip.price}</span>
-                                  <ChevronLeft size={16} className="text-white/30 group-hover:text-emerald-400 transition-colors"/>
-                               </div>
-                            </div>
-                         ))}
-                      </div>
-                   </div>
-                )}
 
                 <div className="grid grid-cols-2 gap-4">
                    {CATEGORIES.map(cat => (
                      <button key={cat.id} disabled={!cat.active} onClick={() => {setSelectedCategory(cat.id); setActiveView('list'); setSelectedHotel(null); setSelectedCity(null); setSelectedBusType(null);}} 
-                       className={`p-5 rounded-[2.5rem] flex flex-col items-center justify-center text-center gap-3 border transition-all ${cat.active ? 'bg-white/5 border-white/10 hover:border-emerald-500/30 hover:bg-white/10 active:scale-95 shadow-lg' : 'opacity-40 grayscale'}`}>
-                        <div className={`w-14 h-14 bg-gradient-to-br ${cat.color} rounded-2xl flex items-center justify-center text-white shadow-md`}>
-                           <cat.icon size={26} />
-                        </div>
+                       className={`p-5 rounded-[2.5rem] flex flex-col items-center justify-center text-center gap-3 border transition-all ${cat.active ? 'bg-white/5 border-white/10 shadow-lg' : 'opacity-40 grayscale'}`}>
+                        <div className={`w-14 h-14 bg-gradient-to-br ${cat.color} rounded-2xl flex items-center justify-center text-white`}><cat.icon size={26} /></div>
                         <div className="flex-1">
-                           <h4 className="text-[13px] font-black tracking-tight">{cat.title}</h4>
-                           <p className="text-[8px] text-white/40 font-bold mt-1 line-clamp-1">{cat.sub}</p>
+                           <h4 className="text-[13px] font-black">{cat.title}</h4>
+                           <p className="text-[8px] text-white/40 mt-1">{cat.sub}</p>
                         </div>
                      </button>
                    ))}
@@ -792,292 +631,141 @@ export default function App() {
               </div>
             )}
 
-            {/* WALLET / REWARDS VIEW */}
+            {/* WALLET */}
             {activeView === 'wallet' && (
-              <div className="space-y-6 max-w-xl mx-auto animate-in fade-in slide-in-from-right-4">
-                 <div className="bg-gradient-to-br from-emerald-900 to-[#112240] p-8 rounded-[3rem] text-center shadow-2xl relative overflow-hidden border border-emerald-500/20">
-                     <Award size={100} className="text-emerald-500/10 absolute -top-4 -right-8 transform rotate-12" />
-                     <div className="flex justify-center mb-4"><HTLogo /></div>
-                     <h2 className="text-2xl font-black text-white mb-2">نادي النخبة HT</h2>
-                     <p className="text-xs text-emerald-100/70 mb-6">اجمع النقاط مع كل طلب وحوّلها لهدايا مميزة تحمل بصمتنا</p>
-                     
-                     {user?.isAnonymous ? (
-                         <button onClick={() => setAuthModal('signup')} className="bg-emerald-500 text-black px-6 py-3 rounded-2xl font-black text-xs shadow-lg animate-pulse">
-                             سجل حسابك الآن لتفعيل المحفظة
-                         </button>
-                     ) : (
-                         <div className="bg-[#0B192C]/60 backdrop-blur-md rounded-[2rem] p-5 inline-block border border-white/5">
-                             <p className="text-[10px] text-emerald-400 font-black uppercase mb-1">رصيد نقاطك الحالي</p>
-                             <div className="flex items-baseline justify-center gap-1">
-                                 <span className="text-5xl font-black text-white">{userPoints}</span>
-                                 <span className="text-sm font-bold text-white/50">نقطة</span>
-                             </div>
+              <div className="space-y-6 max-w-xl mx-auto animate-in">
+                 <div className="bg-gradient-to-br from-emerald-900 to-[#112240] p-8 rounded-[3rem] text-center border border-emerald-500/20">
+                     <h2 className="text-2xl font-black text-white mb-2">رصيد نقاطك</h2>
+                     <span className="text-5xl font-black text-white">{userPoints}</span>
+                 </div>
+                 {HT_REWARDS.map(reward => (
+                     <div key={reward.id} className="bg-[#112240] p-4 rounded-[2.5rem] flex items-center gap-4">
+                         <div className={`w-16 h-16 ${reward.bg} ${reward.color} rounded-[1.5rem] flex items-center justify-center`}><reward.icon size={28}/></div>
+                         <div className="flex-1 text-right">
+                             <h4 className="text-sm font-black">{reward.name}</h4>
+                             <div className="text-[10px] text-emerald-400 mt-2">{reward.points} نقطة</div>
                          </div>
-                     )}
-                 </div>
-
-                 {redeemSuccess && (
-                     <div className="bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 p-4 rounded-2xl text-center text-[10px] font-black flex items-center justify-center gap-2 animate-in zoom-in-95">
-                         <PartyPopper size={16}/> {redeemSuccess}
+                         <button onClick={() => handleRedeemReward(reward)} className="bg-emerald-500 text-black px-4 py-3 rounded-xl font-black text-[10px]">استبدال</button>
                      </div>
-                 )}
-
-                 <div>
-                     <h3 className="text-lg font-black px-2 mb-4 flex items-center gap-2"><Gift size={18} className="text-emerald-400"/> متجر هدايا HT</h3>
-                     <div className="space-y-4">
-                         {HT_REWARDS.map(reward => (
-                             <div key={reward.id} className="bg-[#112240] border border-white/5 p-4 rounded-[2.5rem] flex items-center gap-4 shadow-lg group">
-                                 <div className={`w-16 h-16 ${reward.bg} ${reward.color} rounded-[1.5rem] flex items-center justify-center shrink-0`}>
-                                     <reward.icon size={28}/>
-                                 </div>
-                                 <div className="flex-1 text-right">
-                                     <h4 className="text-sm font-black text-white">{reward.name}</h4>
-                                     <p className="text-[9px] text-white/40 mt-1 leading-relaxed">{reward.desc}</p>
-                                     <div className="text-[10px] font-black text-emerald-400 mt-2 bg-emerald-500/10 inline-block px-2 py-0.5 rounded-lg">{reward.points} نقطة</div>
-                                 </div>
-                                 <button onClick={() => handleRedeemReward(reward)} className={`px-4 py-3 rounded-xl font-black text-[10px] shadow-lg transition-all active:scale-95 ${(!user?.isAnonymous && userPoints >= reward.points) ? 'bg-emerald-500 text-black hover:bg-emerald-400' : 'bg-white/5 text-white/30 cursor-not-allowed'}`}>
-                                     استبدال
-                                 </button>
-                             </div>
-                         ))}
-                     </div>
-                 </div>
+                 ))}
               </div>
             )}
 
             {activeView === 'list' && (
-               <div className="space-y-6 animate-in slide-in-from-left-4 max-w-xl mx-auto">
+               <div className="space-y-6 animate-in max-w-xl mx-auto">
                   <div className="flex items-center gap-4 bg-[#112240] p-4 rounded-3xl border border-white/5 shadow-lg">
                      <button onClick={() => {
                        if (selectedCategory === 'hotel' && selectedHotel) { setSelectedHotel(null); }
                        else if (selectedCategory === 'hotel' && selectedCity) { setSelectedCity(null); }
                        else if (selectedCategory === 'bus' && selectedBusType) { setSelectedBusType(null); }
                        else { setActiveView('main'); setSelectedCategory(null); setSelectedBusType(null); setSelectedCity(null); }
-                     }} className="w-10 h-10 bg-white/5 hover:bg-emerald-500 hover:text-black rounded-xl flex items-center justify-center transition-colors"><ChevronLeft className="rotate-180"/></button>
+                     }} className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center"><ChevronLeft className="rotate-180"/></button>
                      <div className="text-right flex-1">
                         <h2 className="text-lg font-black text-white">{CATEGORIES.find(c => c.id === selectedCategory)?.title}</h2>
-                        <p className="text-[10px] text-white/40">{selectedHotel ? selectedHotel.name : selectedCity ? `فنادق ${selectedCity.name}` : selectedBusType ? 'حجز باصات' : 'اختر ما يناسبك'}</p>
                      </div>
                   </div>
 
                   <div className="space-y-4 pb-10">
-                    {/* FLIGHTS VIEW */}
+                    {/* FLIGHTS */}
                     {selectedCategory === 'flights' && (
-                        <div className="bg-[#112240] p-8 rounded-[3rem] border border-white/5 shadow-xl text-center space-y-4 animate-in zoom-in-95">
-                            <Plane size={48} className="mx-auto text-cyan-400 mb-4 animate-bounce" />
-                            <h3 className="font-black text-lg text-white">حجز طيران بأفضل الأسعار</h3>
-                            <p className="text-xs text-white/50 leading-relaxed px-4">عليك فقط تحديد المطارات والتاريخ، وسنقوم بتزويدك بأفضل الرحلات المتوفرة.</p>
-                            <div className="flex flex-col gap-3 pt-4">
-                              <button onClick={() => setBookingItem({title: 'حجز طيران'})} className="w-full bg-cyan-600 text-white py-4 rounded-2xl font-black text-xs shadow-lg shadow-cyan-600/20 active:scale-95 transition-all">بدء طلب الحجز</button>
-                              <button onClick={openWhatsApp} className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 py-4 rounded-2xl font-black text-xs flex items-center justify-center gap-2 hover:bg-emerald-500 hover:text-black transition-all">
-                                <MessageCircle size={18}/> دردشة لمعرفة الرحلات المتاحة
-                              </button>
-                            </div>
+                        <div className="bg-[#112240] p-8 rounded-[3rem] text-center">
+                            <Plane size={48} className="mx-auto text-cyan-400 mb-4" />
+                            <h3 className="font-black text-lg">حجز طيران</h3>
+                            <button onClick={() => setBookingItem({title: 'حجز طيران'})} className="w-full bg-cyan-600 text-white py-4 rounded-2xl font-black mt-4">بدء الحجز</button>
                         </div>
                     )}
 
-                    {/* TRANSIT VIEW */}
+                    {/* TRANSIT */}
                     {selectedCategory === 'transit' && (
-                        <div className="bg-[#112240] p-8 rounded-[3rem] border border-white/5 shadow-xl text-center animate-in zoom-in-95">
-                            <Globe size={48} className="mx-auto text-indigo-400 mb-4 animate-pulse" />
-                            <h3 className="font-black text-lg text-white">سفريات المحافظات</h3>
-                            <p className="text-xs text-white/50 px-4 mt-2 mb-6 leading-relaxed">نقل آمن ومريح بسيارات VIP عادية أو سيارات جيب.</p>
-                            <button onClick={() => setBookingItem({title: 'طلب سفر بين المحافظات'})} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs shadow-lg shadow-indigo-600/20 active:scale-95 transition-all">حجز رحلة سفر</button>
-                        </div>
-                    )}
-                    
-                    {/* PUBLIC SERVICES VIEW */}
-                    {selectedCategory === 'services' && (
-                        <div className="grid grid-cols-1 gap-4">
-                           {PUBLIC_SERVICES_LIST.map(srv => (
-                              <button key={srv.id} onClick={() => setBookingItem(srv)} className="bg-[#112240] border border-white/5 p-6 rounded-[2.5rem] flex items-center gap-4 text-right hover:bg-white/5 transition-all group shadow-md">
-                                 <div className="w-12 h-12 bg-slate-800/50 rounded-xl flex items-center justify-center text-slate-300 group-hover:text-emerald-400"><srv.icon size={24}/></div>
-                                 <div className="flex-1">
-                                    <h4 className="font-black text-sm text-white">{srv.title}</h4>
-                                    <p className="text-[10px] text-white/40 mt-1">{srv.desc}</p>
-                                 </div>
-                                 <ChevronRight size={16} className="text-slate-500"/>
-                              </button>
-                           ))}
+                        <div className="bg-[#112240] p-8 rounded-[3rem] text-center">
+                            <Globe size={48} className="mx-auto text-indigo-400 mb-4" />
+                            <h3 className="font-black text-lg">سفريات المحافظات</h3>
+                            <button onClick={() => setBookingItem({title: 'رحلة سفر'})} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black mt-4">حجز رحلة</button>
                         </div>
                     )}
 
-                    {/* CARS LIST */}
+                    {/* CARS */}
                     {selectedCategory === 'car' && CAR_MODELS.map(car => (
-                        <div key={car.id} className="bg-[#112240] rounded-[2.5rem] overflow-hidden border border-white/5 p-4 shadow-lg group hover:border-emerald-500/30 transition-all">
-                           <div className="relative mb-4">
-                              <img src={car.img} className="w-full h-44 object-cover rounded-[2rem]" alt={car.name}/>
-                           </div>
+                        <div key={car.id} className="bg-[#112240] rounded-[2.5rem] overflow-hidden p-4">
+                           <img src={car.img} className="w-full h-44 object-cover rounded-[2rem] mb-4" alt={car.name}/>
                            <div className="flex justify-between items-center px-2">
-                              <div className="text-right">
-                                 <h4 className="font-black text-white">{car.name}</h4>
-                              </div>
-                              <button onClick={() => setBookingItem(car)} className="bg-emerald-500 text-black px-8 py-2.5 rounded-2xl font-black text-xs shadow-lg active:scale-95">احجز الآن</button>
+                              <h4 className="font-black">{car.name}</h4>
+                              <button onClick={() => setBookingItem(car)} className="bg-emerald-500 text-black px-8 py-2.5 rounded-2xl font-black text-xs">احجز الآن</button>
                            </div>
                         </div>
                     ))}
 
                     {/* BUSES */}
-                    {selectedCategory === 'bus' && !selectedBusType && (
-                        <div className="grid grid-cols-1 gap-4">
-                           {BUS_TYPES.map(type => (
-                              <button key={type.id} onClick={() => {setSelectedBusType(type.id); if(type.id === 'leisure') setBookingItem(type);}} 
-                                className="p-6 bg-[#112240] border border-white/5 rounded-[2.5rem] flex items-center gap-5 text-right hover:bg-white/5 transition-all shadow-lg">
-                                 <div className={`w-14 h-14 ${type.color} rounded-2xl flex items-center justify-center`}><type.icon size={24}/></div>
-                                 <div className="flex-1">
-                                    <h4 className="font-black text-base text-white">{type.title}</h4>
-                                    <p className="text-[10px] text-white/40 mt-1">{type.sub}</p>
-                                 </div>
-                                 <Plus size={20} className="text-white/20"/>
-                              </button>
-                           ))}
-                        </div>
-                    )}
+                    {selectedCategory === 'bus' && !selectedBusType && BUS_TYPES.map(type => (
+                          <button key={type.id} onClick={() => {setSelectedBusType(type.id); if(type.id === 'leisure') setBookingItem(type);}} className="p-6 bg-[#112240] border border-white/5 rounded-[2.5rem] w-full flex items-center gap-5 text-right">
+                             <div className={`w-14 h-14 ${type.color} rounded-2xl flex items-center justify-center`}><type.icon size={24}/></div>
+                             <div className="flex-1">
+                                <h4 className="font-black text-base">{type.title}</h4>
+                                <p className="text-[10px] text-white/40">{type.sub}</p>
+                             </div>
+                          </button>
+                    ))}
                     {selectedCategory === 'bus' && selectedBusType === 'contract' && (
-                       <div className="text-center py-12 bg-[#112240] rounded-[3rem] border border-white/5 shadow-xl">
-                           <School size={48} className="mx-auto text-blue-500 mb-4 animate-bounce"/>
-                           <h3 className="text-white font-black mb-6 text-lg">تأمين باصات للمدارس والمعامل</h3>
-                           <button onClick={() => setBookingItem({title: 'عقود مدارس ومعامل', type: 'bus'})} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs shadow-lg">تعبئة بيانات العقد</button>
+                       <div className="text-center py-12 bg-[#112240] rounded-[3rem]">
+                           <School size={48} className="mx-auto text-blue-500 mb-4"/>
+                           <h3 className="font-black mb-6 text-lg">عقود باصات</h3>
+                           <button onClick={() => setBookingItem({title: 'عقود مدارس ومعامل'})} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs">تعبئة البيانات</button>
                        </div>
                     )}
 
                     {/* HOTELS */}
-                    {selectedCategory === 'hotel' && !selectedCity && (
-                       <div className="grid grid-cols-2 gap-4">
-                          {CITIES.map(city => (
-                             <button key={city.id} onClick={() => setSelectedCity(city)} className="bg-[#112240] rounded-[2.5rem] border border-white/5 p-4 flex flex-col items-center gap-3 hover:bg-white/5 transition-all shadow-lg">
-                                <img src={city.img} className="w-full h-24 object-cover rounded-2xl opacity-80" alt={city.name} />
-                                <h4 className="text-sm font-black text-white">{city.name}</h4>
-                             </button>
-                          ))}
-                       </div>
-                    )}
-                    {selectedCategory === 'hotel' && selectedCity && !selectedHotel && (
-                       <div className="grid grid-cols-1 gap-4">
-                          <h3 className="text-xs font-black text-amber-500 px-2 flex items-center gap-2"><MapPin size={14}/> فنادق {selectedCity.name}</h3>
-                          {HOTELS_DATA.filter(h => h.cityId === selectedCity.id).map(hotel => (
-                             <div key={hotel.id} className="bg-[#112240] rounded-[2.5rem] overflow-hidden border border-white/5 p-4 shadow-lg">
-                                <img src={hotel.img} className="w-full h-32 object-cover rounded-[2rem] mb-4 opacity-80" alt={hotel.name}/>
-                                <div className="flex justify-between items-center px-2">
-                                   <div className="text-right">
-                                      <h4 className="font-black text-white text-sm">{hotel.name}</h4>
-                                      <p className="text-[10px] text-white/40 mt-1">{hotel.desc}</p>
-                                   </div>
-                                   <button onClick={() => setSelectedHotel(hotel)} className="bg-amber-500 text-black px-6 py-2 rounded-2xl font-black text-xs">عرض الغرف</button>
-                                </div>
-                             </div>
-                          ))}
-                       </div>
-                    )}
-                    {selectedCategory === 'hotel' && selectedHotel && (
-                       <div className="grid grid-cols-1 gap-4 animate-in slide-in-from-right-4">
-                          {ROOM_TYPES.map(room => (
-                             <button key={room.id} onClick={() => setBookingItem(room)} 
-                               className="p-6 bg-[#112240] border border-white/5 rounded-[2.5rem] flex items-center gap-5 hover:bg-white/5 transition-all text-right group shadow-lg">
-                                <div className="w-12 h-12 bg-amber-500/10 text-amber-500 rounded-xl flex items-center justify-center group-hover:bg-amber-500 group-hover:text-black transition-colors"><room.icon size={20}/></div>
-                                <div className="flex-1">
-                                   <h4 className="font-black text-base text-white">{room.name}</h4>
-                                   <p className="text-[10px] text-white/40 mt-1">{room.desc}</p>
-                                </div>
-                                <Plus size={20} className="text-white/20"/>
-                             </button>
-                          ))}
-                       </div>
-                    )}
+                    {selectedCategory === 'hotel' && !selectedCity && CITIES.map(city => (
+                         <button key={city.id} onClick={() => setSelectedCity(city)} className="w-full bg-[#112240] rounded-[2.5rem] p-4 flex flex-col items-center gap-3">
+                            <img src={city.img} className="w-full h-24 object-cover rounded-2xl opacity-80" alt={city.name} />
+                            <h4 className="text-sm font-black text-white">{city.name}</h4>
+                         </button>
+                    ))}
+                    {selectedCategory === 'hotel' && selectedCity && !selectedHotel && HOTELS_DATA.filter(h => h.cityId === selectedCity.id).map(hotel => (
+                         <div key={hotel.id} className="bg-[#112240] rounded-[2.5rem] overflow-hidden p-4">
+                            <img src={hotel.img} className="w-full h-32 object-cover rounded-[2rem] mb-4 opacity-80" alt={hotel.name}/>
+                            <div className="flex justify-between items-center px-2">
+                               <h4 className="font-black text-sm">{hotel.name}</h4>
+                               <button onClick={() => setSelectedHotel(hotel)} className="bg-amber-500 text-black px-6 py-2 rounded-2xl font-black text-xs">عرض الغرف</button>
+                            </div>
+                         </div>
+                    ))}
+                    {selectedCategory === 'hotel' && selectedHotel && ROOM_TYPES.map(room => (
+                         <button key={room.id} onClick={() => setBookingItem(room)} className="w-full p-6 bg-[#112240] rounded-[2.5rem] flex items-center gap-5 text-right">
+                            <div className="w-12 h-12 bg-amber-500/10 text-amber-500 rounded-xl flex items-center justify-center"><room.icon size={20}/></div>
+                            <h4 className="font-black text-base flex-1">{room.name}</h4>
+                         </button>
+                    ))}
 
                     {/* EVENTS */}
-                    {selectedCategory === 'events' && (
-                       <div className="grid grid-cols-1 gap-4">
-                          {dynamicEvents.filter(ev => ev.postType !== 'offer').map(event => {
-                              const EventIcon = event.iconType === 'sea' ? Ship : event.iconType === 'tent' ? Tent : Music;
-                              return (
-                                 <div key={event.id} className="bg-[#112240] p-6 rounded-[2.5rem] border border-white/5 flex items-center gap-4 text-right shadow-lg">
-                                    <div className="w-14 h-14 bg-rose-500/10 text-rose-500 rounded-2xl flex items-center justify-center shrink-0"><EventIcon size={24}/></div>
-                                    <div className="flex-1">
-                                       <h4 className="font-black text-sm text-white">{event.name}</h4>
-                                       <p className="text-[10px] text-white/40 font-bold mt-1">{event.date} • <span className="text-emerald-400">{event.price}</span></p>
-                                       <p className="text-[9px] text-rose-400 mt-1">{event.desc}</p>
-                                    </div>
-                                    <button onClick={() => setBookingItem(event)} className="bg-rose-500 text-white px-5 py-2.5 rounded-xl text-[10px] font-black">حجز</button>
-                                 </div>
-                              );
-                          })}
-                          {dynamicEvents.filter(ev => ev.postType !== 'offer').length === 0 && (
-                              <div className="text-center py-10 opacity-50">
-                                  <p className="text-xs font-bold">لا توجد رحلات قادمة حالياً. تابعنا للحصول على أحدث العروض!</p>
-                              </div>
-                          )}
-                       </div>
-                    )}
+                    {selectedCategory === 'events' && dynamicEvents.filter(ev => ev.postType !== 'offer').map(event => (
+                         <div key={event.id} className="bg-[#112240] p-6 rounded-[2.5rem] flex items-center gap-4 text-right">
+                            <div className="w-14 h-14 bg-rose-500/10 text-rose-500 rounded-2xl flex items-center justify-center shrink-0"><Music size={24}/></div>
+                            <div className="flex-1">
+                               <h4 className="font-black text-sm">{event.name}</h4>
+                               <p className="text-[10px] text-white/40 font-bold mt-1">{event.date} • <span className="text-emerald-400">{event.price}</span></p>
+                            </div>
+                            <button onClick={() => setBookingItem(event)} className="bg-rose-500 text-white px-5 py-2.5 rounded-xl text-[10px] font-black">حجز</button>
+                         </div>
+                    ))}
                   </div>
                </div>
             )}
 
             {activeView === 'bookings' && (
-              <div className="space-y-6 animate-in fade-in max-w-4xl mx-auto pb-20">
-                 <h2 className="text-xl font-black text-white px-2 flex items-center gap-2"><ClipboardList size={20} className="text-emerald-500"/> سجل طلباتي</h2>
-                 
-                 {/* PENDING / APPROVED TABLE */}
-                 <div className="space-y-4">
-                     <h3 className="text-xs font-black text-emerald-400/50 mr-2 uppercase tracking-widest flex items-center gap-2"><CheckCircle2 size={14}/> الطلبات الجارية والمقبولة</h3>
-                     <div className="overflow-x-auto rounded-[2.5rem] border border-white/5 bg-[#112240] shadow-lg">
-                        <table className="w-full text-right text-[11px]">
-                           <thead>
-                              <tr className="bg-white/5 text-white/40 border-b border-white/5">
-                                 <th className="p-4">الخدمة</th>
-                                 <th className="p-4">التاريخ</th>
-                                 <th className="p-4">الحالة</th>
-                                 <th className="p-4">تكرار</th>
-                              </tr>
-                           </thead>
-                           <tbody className="divide-y divide-white/5">
-                              {userOrders.filter(o => o.status !== 'rejected').map(order => (
-                                <tr key={order.id} className="hover:bg-white/5 transition-colors">
-                                   <td className="p-4">
-                                      <div className="font-black text-emerald-400">{order.serviceTitle}</div>
-                                   </td>
-                                   <td className="p-4 text-white/50">{safeFormatDate(order.createdAt)}</td>
-                                   <td className="p-4"><StatusBadge status={order.status} /></td>
-                                   <td className="p-4">
-                                      <button onClick={() => repeatOrder(order)} className="p-2 bg-white/5 hover:bg-emerald-500 hover:text-black rounded-lg transition-all text-white">
-                                         <RotateCcw size={12}/>
-                                      </button>
-                                   </td>
-                                </tr>
-                              ))}
-                              {userOrders.filter(o => o.status !== 'rejected').length === 0 && <tr><td colSpan="4" className="p-8 text-center text-white/20 italic">لا يوجد طلبات</td></tr>}
-                           </tbody>
-                        </table>
-                     </div>
-                 </div>
-
-                 {/* REJECTED TABLE */}
-                 <div className="space-y-4">
-                     <h3 className="text-xs font-black text-rose-500/50 mr-2 uppercase tracking-widest flex items-center gap-2"><AlertCircle size={14}/> الطلبات المرفوضة (للتعديل)</h3>
-                     <div className="overflow-x-auto rounded-[2.5rem] border border-rose-500/20 bg-[#112240] shadow-lg">
-                        <table className="w-full text-right text-[11px]">
-                           <thead>
-                              <tr className="bg-rose-500/10 text-rose-500/40 border-b border-rose-500/10">
-                                 <th className="p-4">الخدمة وسبب الرفض</th>
-                                 <th className="p-4 text-center">إجراء</th>
-                              </tr>
-                           </thead>
-                           <tbody className="divide-y divide-white/5">
-                              {userOrders.filter(o => o.status === 'rejected').map(order => (
-                                <tr key={order.id} className="hover:bg-rose-500/10 transition-colors">
-                                   <td className="p-4">
-                                      <div className="font-black text-rose-400 mb-1">{order.serviceTitle}</div>
-                                      <div className="text-[9px] bg-rose-500/10 text-rose-400 p-2 rounded inline-block font-bold">السبب: {order.rejectionReason || 'غير محدد'}</div>
-                                   </td>
-                                   <td className="p-4 text-center">
-                                      <button onClick={() => handleEditOrder(order)} className="px-3 py-2 bg-rose-500 text-white rounded-xl font-black text-[9px]">تعديل وإعادة إرسال</button>
-                                   </td>
-                                </tr>
-                              ))}
-                              {userOrders.filter(o => o.status === 'rejected').length === 0 && <tr><td colSpan="2" className="p-8 text-center text-white/20 italic">لا يوجد طلبات مرفوضة</td></tr>}
-                           </tbody>
-                        </table>
-                     </div>
+              <div className="space-y-6 animate-in max-w-4xl mx-auto pb-20">
+                 <h2 className="text-xl font-black text-white px-2">سجل طلباتي</h2>
+                 <div className="overflow-x-auto rounded-[2.5rem] bg-[#112240]">
+                    <table className="w-full text-right text-[11px]">
+                       <tbody className="divide-y divide-white/5">
+                          {userOrders.map(order => (
+                            <tr key={order.id} className="hover:bg-white/5">
+                               <td className="p-4 font-black text-emerald-400">{order.serviceTitle}</td>
+                               <td className="p-4"><StatusBadge status={order.status} /></td>
+                            </tr>
+                          ))}
+                          {userOrders.length === 0 && <tr><td colSpan="2" className="p-8 text-center text-white/20">لا يوجد طلبات</td></tr>}
+                       </tbody>
+                    </table>
                  </div>
               </div>
             )}
@@ -1087,151 +775,34 @@ export default function App() {
 
       {/* Unified Booking Modal */}
       {bookingItem && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[1000] flex items-center justify-center p-4">
-           <div className="bg-[#112240] w-full max-w-md p-6 rounded-[3rem] border border-white/10 relative overflow-y-auto max-h-[95vh] shadow-2xl">
-              <button onClick={() => {setBookingItem(null);}} className="absolute top-6 left-6 text-white/20 hover:text-rose-500 transition-colors"><X size={20}/></button>
-              
-              <div className="text-right mb-6">
-                 <h3 className="text-xl font-black text-white">{bookingItem?.isEditMode ? 'تعديل الطلب المرفوض' : 'إكمال بيانات الحجز'}</h3>
-                 <p className="text-[10px] text-emerald-400 font-bold mt-1 uppercase tracking-widest">{bookingItem.name || bookingItem.title || bookingItem.serviceTitle}</p>
-              </div>
-
+        <div className="fixed inset-0 bg-black/95 z-[1000] flex items-center justify-center p-4">
+           <div className="bg-[#112240] w-full max-w-md p-6 rounded-[3rem] relative overflow-y-auto max-h-[95vh]">
+              <button onClick={() => {setBookingItem(null);}} className="absolute top-6 left-6 text-white/20"><X size={20}/></button>
+              <h3 className="text-xl font-black mb-6 text-right">إكمال الحجز</h3>
               <form onSubmit={submitBooking} className="space-y-4 text-right">
+                 <input name="name" required defaultValue={localStorage.getItem('sh-user-name') || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-2xl p-4 text-xs text-white" placeholder="الاسم" />
+                 <input name="phone" required defaultValue={localStorage.getItem('sh-user-phone') || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-2xl p-4 text-xs text-white text-left" placeholder="رقم الجوال" />
                  
-                 {/* CONTACT INFO */}
-                 <div className="grid grid-cols-2 gap-4">
-                    <input name="name" required defaultValue={bookingItem?.name || localStorage.getItem('sh-user-name') || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-2xl p-4 text-xs text-white text-right outline-none focus:border-emerald-500 shadow-inner" placeholder="الاسم الكامل" />
-                    <input name="phone" required defaultValue={bookingItem?.phone || localStorage.getItem('sh-user-phone') || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-2xl p-4 text-xs text-left text-white outline-none focus:border-emerald-500 shadow-inner" placeholder="09xxxxxx" />
-                 </div>
-
-                 {/* HOTEL SPECIFIC FIELDS */}
                  {selectedCategory === 'hotel' && (
-                   <div className="space-y-3 p-4 bg-amber-500/5 rounded-3xl border border-amber-500/10">
-                      <div className="bg-amber-500/10 p-2 rounded-xl text-amber-400 text-[9px] font-bold text-center flex justify-center items-center gap-1"><Info size={12}/> الاستلام والتسليم الساعة 11 صباحاً</div>
-                      <div className="grid grid-cols-2 gap-3">
-                         <div className="space-y-1">
-                            <label className="text-[9px] text-amber-500/50 mr-2">من تاريخ</label>
-                            <input name="checkIn" type="date" required defaultValue={bookingItem?.checkIn || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white" />
-                         </div>
-                         <div className="space-y-1">
-                            <label className="text-[9px] text-amber-500/50 mr-2">إلى تاريخ</label>
-                            <input name="checkOut" type="date" required defaultValue={bookingItem?.checkOut || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white" />
-                         </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                         <input name="nightCount" type="number" min="1" placeholder="عدد الليالي" required defaultValue={bookingItem?.nightCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right" />
-                         <input name="paxCount" type="number" min="1" placeholder="عدد الأشخاص" required defaultValue={bookingItem?.paxCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right" />
-                      </div>
-                      <select name="hasKids" required defaultValue={bookingItem?.hasKids || "no"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none">
-                         <option value="no">لا يوجد أطفال</option>
-                         <option value="yes">يوجد أطفال</option>
-                      </select>
+                   <div className="grid grid-cols-2 gap-3">
+                      <input name="checkIn" type="date" required className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white" />
+                      <input name="nightCount" type="number" min="1" placeholder="عدد الليالي" required className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right" />
                    </div>
                  )}
-
-                 {/* FLIGHTS SPECIFIC FIELDS */}
-                 {selectedCategory === 'flights' && (
-                   <div className="space-y-3 p-4 bg-cyan-500/5 rounded-3xl border border-cyan-500/10">
-                      <div className="grid grid-cols-2 gap-3">
-                         <input name="fromAirport" required placeholder="من مطار..." defaultValue={bookingItem?.fromAirport || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right" />
-                         <input name="toAirport" required placeholder="إلى مطار..." defaultValue={bookingItem?.toAirport || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right" />
-                      </div>
-                      <div className="space-y-1">
-                         <label className="text-[9px] text-cyan-500/50 mr-2">تاريخ الرحلة</label>
-                         <input name="flightDate" type="date" required defaultValue={bookingItem?.flightDate || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white" />
-                      </div>
-                   </div>
-                 )}
-
-                 {/* TRANSIT SPECIFIC FIELDS */}
-                 {selectedCategory === 'transit' && (
-                   <div className="space-y-3 p-4 bg-indigo-500/5 rounded-3xl border border-indigo-500/10">
-                      <div className="grid grid-cols-2 gap-3">
-                         <input name="fromLocation" required placeholder="مكان الانطلاق" defaultValue={bookingItem?.fromLocation || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right" />
-                         <input name="toLocation" required placeholder="الوجهة" defaultValue={bookingItem?.toLocation || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right" />
-                      </div>
-                      <select name="transitType" required defaultValue={bookingItem?.transitType || "راكب واحد"} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none">
-                         <option value="راكب واحد">راكب واحد</option>
-                         <option value="راكبين">راكبين</option>
-                         <option value="سيارة كاملة">سيارة كاملة</option>
-                      </select>
-                      <select name="carTypePreference" required defaultValue={bookingItem?.carTypePreference || "normal"} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none">
-                         <option value="normal">سيارة VIP عادية</option>
-                         <option value="jeep">تفضيل سيارة جيب (Jeep)</option>
-                      </select>
-                   </div>
-                 )}
-
-                 {/* SERVICES SPECIFIC FIELDS */}
-                 {selectedCategory === 'services' && (
-                   <div className="space-y-3 p-4 bg-slate-500/5 rounded-3xl border border-slate-500/10">
-                      <label className="text-[9px] text-slate-400 font-bold">يرجى كتابة التفاصيل الدقيقة للمعاملة أو الأوراق:</label>
-                      <textarea name="serviceDetails" required defaultValue={bookingItem?.serviceDetails || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right h-24 outline-none" placeholder="تفاصيل الخدمة المطلوبة..."></textarea>
-                   </div>
-                 )}
-
-                 {/* BUS CONTRACTS FIELDS */}
-                 {selectedCategory === 'bus' && selectedBusType === 'contract' && (
-                   <div className="space-y-3 p-4 bg-blue-500/5 rounded-3xl border border-blue-500/10">
-                      <input name="orgName" required placeholder="اسم المدرسة / المعمل" defaultValue={bookingItem?.orgName || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right" />
-                      <div className="grid grid-cols-2 gap-3">
-                         <div className="space-y-1 text-right">
-                            <label className="text-[9px] text-white/30 mr-2">بداية الدوام</label>
-                            <input name="startTime" type="time" required defaultValue={bookingItem?.startTime || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white" />
-                         </div>
-                         <div className="space-y-1 text-right">
-                            <label className="text-[9px] text-white/30 mr-2">نهاية الدوام</label>
-                            <input name="endTime" type="time" required defaultValue={bookingItem?.endTime || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white" />
-                         </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                         <input name="workerCount" type="number" min="1" placeholder="عدد العمال/الطلاب" required defaultValue={bookingItem?.workerCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right" />
-                         <input name="busCount" type="number" min="1" placeholder="كم باص؟" required defaultValue={bookingItem?.busCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right" />
-                      </div>
-                   </div>
-                 )}
-
-                 {/* BUS LEISURE & EVENTS FIELDS */}
-                 {(selectedCategory === 'bus' && selectedBusType === 'leisure') && (
-                   <div className="space-y-3 p-4 bg-emerald-500/5 rounded-3xl border border-emerald-500/10">
-                      <div className="grid grid-cols-2 gap-3">
-                         <div className="space-y-1">
-                           <label className="text-[9px] text-white/30 mr-2">تاريخ الرحلة</label>
-                           <input name="tripDate" type="date" required defaultValue={bookingItem?.tripDate || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white" />
-                         </div>
-                         <div className="space-y-1">
-                           <label className="text-[9px] text-white/30 mr-2">وقت الانطلاق</label>
-                           <input name="tripTime" type="time" required defaultValue={bookingItem?.tripTime || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white" />
-                         </div>
-                      </div>
-                   </div>
-                 )}
-
-                 {selectedCategory === 'events' && (
-                    <div className="grid grid-cols-2 gap-3 bg-rose-500/5 p-5 rounded-3xl border border-rose-500/10">
-                       <input name="paxCount" type="number" min="1" placeholder="عدد الأشخاص" required defaultValue={bookingItem?.paxCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right" />
-                       <select name="hasKids" required defaultValue={bookingItem?.hasKids || "no"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none">
-                          <option value="no">لا يوجد أطفال</option>
-                          <option value="yes">نعم، يوجد أطفال</option>
-                       </select>
-                    </div>
-                 )}
-
-                 {/* CAR OPTIONS */}
                  {selectedCategory === 'car' && (
                     <div className="space-y-3 p-4 bg-emerald-500/5 rounded-3xl border border-emerald-500/10">
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1 text-right">
-                                <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">المدة</label>
-                                <select name="rentDuration" required defaultValue={bookingItem?.rentDuration || "daily"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none">
+                                <label className="text-[9px] text-white/30 mr-2">مدة الإيجار</label>
+                                <select name="rentDuration" required className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none appearance-none">
                                     <option value="daily">يومي</option>
                                     <option value="weekly">أسبوعي</option>
                                     <option value="monthly">شهري</option>
                                 </select>
                             </div>
                             <div className="space-y-1 text-right">
-                                <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">السائق</label>
-                                <select name="driverOption" required defaultValue={bookingItem?.driverOption || "with_driver"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none">
+                                <label className="text-[9px] text-white/30 mr-2">السائق</label>
+                                <select name="driverOption" required className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none appearance-none">
                                     <option value="with_driver">مع سائق</option>
                                     <option value="without_driver">بدون سائق</option>
                                 </select>
@@ -1239,67 +810,14 @@ export default function App() {
                         </div>
                     </div>
                  )}
-
-                 {/* PAYMENT SECTION - ALWAYS AT THE BOTTOM */}
-                 <div className="pt-4 border-t border-white/5 space-y-3">
-                    <p className="text-[9px] font-black text-white/40 uppercase">اختر طريقة الدفع المفضلة</p>
-                    <div className="grid grid-cols-2 gap-3">
-                        <button type="button" onClick={() => setPaymentMethod('office')} className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${paymentMethod === 'office' ? 'bg-emerald-500 border-emerald-400 text-black shadow-lg shadow-emerald-500/20' : 'bg-[#0B192C] border-white/10 text-white/40'}`}>
-                            <Store size={18}/>
-                            <span className="text-[10px] font-black">الدفع بالمكتب</span>
-                        </button>
-                        <button type="button" onClick={() => setPaymentMethod('cham_cash')} className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${paymentMethod === 'cham_cash' ? 'bg-indigo-500 border-indigo-400 text-white shadow-lg shadow-indigo-500/20' : 'bg-[#0B192C] border-white/10 text-white/40'}`}>
-                            <Wallet size={18}/>
-                            <span className="text-[10px] font-black">شام كاش</span>
-                        </button>
-                    </div>
-                    {paymentMethod === 'office' && <p className="text-[8px] text-emerald-400/60 text-center mt-2 font-bold">مركزنا: حلب - محطة بغداد - مقابل المحطة</p>}
-                 </div>
-
-                 <button type="submit" className="w-full bg-emerald-500 py-4 rounded-2xl font-black text-xs text-black mt-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all">
-                     {bookingItem?.isEditMode ? 'حفظ التعديلات وإعادة الإرسال' : 'تأكيد وإرسال الطلب'}
-                 </button>
+                 <button type="submit" className="w-full bg-emerald-500 py-4 rounded-2xl font-black text-xs text-black mt-2">تأكيد وإرسال</button>
               </form>
            </div>
         </div>
       )}
 
-      {/* Admin Rejection Modal */}
-      {rejectModal && (
-        <div className="fixed inset-0 bg-black/95 z-[2000] flex items-center justify-center p-6">
-           <div className="bg-[#112240] w-full max-sm p-8 rounded-[2.5rem] border border-rose-500/20 space-y-4 shadow-2xl">
-              <h3 className="text-lg font-black text-rose-500 text-right uppercase tracking-widest flex items-center gap-2"><Trash2 size={20}/> توضيح سبب الرفض</h3>
-              <textarea id="reasonText" className="w-full bg-[#0B192C] border border-white/5 rounded-2xl p-4 text-xs h-36 text-white text-right outline-none focus:border-rose-500 leading-relaxed" placeholder="اكتب السبب للعميل (مثال: يرجى تغيير عدد الأشخاص)..."></textarea>
-              <button onClick={() => updateOrderStatus(rejectModal, 'rejected', document.getElementById('reasonText')?.value)} className="w-full bg-rose-600 py-4 rounded-2xl font-black text-xs text-white shadow-lg shadow-rose-600/20">تأكيد الرفض النهائي</button>
-              <button onClick={() => setRejectModal(null)} className="w-full text-[10px] text-white/30 font-bold uppercase tracking-tighter transition-colors hover:text-white">تراجع</button>
-           </div>
-        </div>
-      )}
-
-      {/* Success Modal */}
-      {showSuccessCard && (
-        <div className="fixed inset-0 bg-emerald-950/90 backdrop-blur-md z-[2000] flex items-center justify-center p-6 text-black">
-           <div className="bg-white w-full max-w-sm p-10 rounded-[4rem] text-center shadow-2xl relative overflow-hidden animate-in zoom-in-75">
-              <PartyPopper size={64} className="mx-auto text-emerald-600 mb-6 animate-bounce" />
-              <h3 className="text-2xl font-black mb-2 italic">تم بنجاح!</h3>
-              <p className="text-sm font-bold text-gray-600 mb-2 leading-relaxed">
-                شكراً لثقتك بـ HT. سيقوم فريقنا بالرد عليك فوراً.
-              </p>
-              {(!bookingItem?.isEditMode && !user?.isAnonymous) && (
-                  <p className="text-xs text-emerald-600 font-bold mb-8 bg-emerald-50 p-2 rounded-lg">🎁 تم إضافة 25 نقطة لمحفظتك!</p>
-              )}
-              {(!bookingItem?.isEditMode && user?.isAnonymous) && (
-                  <p className="text-[10px] text-rose-600 font-bold mb-8 bg-rose-50 p-2 rounded-lg cursor-pointer hover:bg-rose-100" onClick={() => {setShowSuccessCard(false); setAuthModal('signup');}}>
-                      💡 فاتتك 25 نقطة! أنشئ حسابك الآن لتبدأ بجمع النقاط.
-                  </p>
-              )}
-              <button onClick={() => {setShowSuccessCard(false); setActiveView('main');}} className="w-full bg-black text-white py-4 rounded-3xl font-black text-xs shadow-xl active:scale-95 transition-all uppercase">العودة للرئيسية</button>
-           </div>
-        </div>
-      )}
-
       {/* Main Navigation Bar */}
-      <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-[#112240]/95 backdrop-blur-3xl border border-white/5 rounded-[3.5rem] p-4 flex justify-around shadow-2xl z-[500] border-t border-emerald-500/10">
+      <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-[#112240]/95 backdrop-blur-3xl rounded-[3.5rem] p-4 flex justify-around shadow-2xl z-[500] border-t border-emerald-500/10">
          <button onClick={() => {setActiveView('main'); setIsAdmin(false); setSelectedCategory(null); setSelectedHotel(null); setSelectedCity(null); setSelectedBusType(null);}} className={`${activeView === 'main' && !isAdmin ? 'text-emerald-400 scale-110 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'text-white/30'} flex flex-col items-center gap-1.5 transition-all duration-300`}>
             <LayoutGrid size={22}/><span className="text-[8px] font-black uppercase">الرئيسية</span>
          </button>
@@ -1313,15 +831,12 @@ export default function App() {
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
-        * { font-family: 'Cairo', sans-serif; -webkit-tap-highlight-color: transparent; scroll-behavior: smooth; }
-        input[type="date"], input[type="time"], input[type="number"], input[type="email"], input[type="password"] { color-scheme: dark; }
-        .animate-in { animation: fadeIn 0.4s ease-out; }
+        * { font-family: 'Cairo', sans-serif; -webkit-tap-highlight-color: transparent; }
+        input[type="date"] { color-scheme: dark; }
+        .animate-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-marquee { animation: marquee 20s linear infinite; }
         @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
-        .animate-marquee { animation: marquee 25s linear infinite; }
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: left 0.75rem center; background-size: 1rem; }
       `}</style>
     </div>
   );
