@@ -643,17 +643,11 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                    {CATEGORIES.map(cat => (
                      <button key={cat.id} disabled={!cat.active} onClick={() => {
-                         if (cat.id === 'transit') {
-                             // فتح نموذج الحجز لخدمة النقل البري مباشرة
-                             setSelectedCategory('transit');
-                             setBookingItem({ title: 'طلب خدمة النقل البري' });
-                         } else {
-                             setSelectedCategory(cat.id); 
-                             setActiveView('list'); 
-                             setSelectedHotel(null); 
-                             setSelectedCity(null); 
-                             setSelectedBusType(null);
-                         }
+                         setSelectedCategory(cat.id); 
+                         setActiveView('list'); 
+                         setSelectedHotel(null); 
+                         setSelectedCity(null); 
+                         setSelectedBusType(null);
                      }} 
                        className={`p-5 rounded-[2.5rem] flex flex-col items-center justify-center text-center gap-3 border transition-all ${cat.active ? 'bg-white/5 border-white/10 shadow-lg hover:bg-white/10 active:scale-95' : 'opacity-40 grayscale'}`}>
                         <div className={`w-14 h-14 bg-gradient-to-br ${cat.color} rounded-2xl flex items-center justify-center text-white shadow-md`}><cat.icon size={26} /></div>
@@ -713,6 +707,30 @@ export default function App() {
                             <button onClick={openWhatsApp} className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 py-4 rounded-2xl font-black text-xs flex items-center justify-center gap-2 hover:bg-emerald-500 hover:text-black transition-all mt-3">
                                 <MessageCircle size={18}/> دردشة لمعرفة الرحلات
                             </button>
+                        </div>
+                    )}
+
+                    {/* TRANSIT - الواجهة الترحيبية الجديدة بخلفية الصور */}
+                    {selectedCategory === 'transit' && (
+                        <div className="space-y-4 animate-in fade-in">
+                            <div className="relative bg-[#112240] w-full h-[400px] rounded-[3rem] overflow-hidden shadow-2xl border border-indigo-500/20 group">
+                                {/* صورة الخلفية - تستخدم الصورة التي رفعتها */}
+                                <img src="/c13.jpg" alt="النقل البري" className="absolute inset-0 w-full h-full object-cover opacity-50" onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1590362891991-f776e747a588?q=80&w=800'; }}/>
+                                <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/60 to-transparent"></div>
+                                
+                                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
+                                    <div className="w-20 h-20 bg-indigo-500/20 backdrop-blur-md rounded-3xl flex items-center justify-center mb-6 border border-indigo-500/30 shadow-inner">
+                                        <CarFront size={40} className="text-indigo-400 animate-pulse" />
+                                    </div>
+                                    <h3 className="font-black text-2xl text-white mb-3 drop-shadow-md">من البيت إلى البيت</h3>
+                                    <p className="text-xs text-indigo-100/90 leading-relaxed mb-8 max-w-[250px] font-bold drop-shadow-md">
+                                        نقل آمن ومريح بين المحافظات وبيروت بسيارات VIP عادية أو سيارات جيب عائلية.
+                                    </p>
+                                    <button onClick={() => setBookingItem({title: 'طلب خدمة النقل البري'})} className="bg-indigo-600 text-white px-8 py-4 rounded-full font-black text-sm shadow-[0_8px_30px_rgba(79,70,229,0.4)] active:scale-95 transition-all flex items-center gap-3 border border-indigo-400">
+                                        الدخول للحجز <ChevronLeft size={18} />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     )}
 
@@ -897,59 +915,39 @@ export default function App() {
                    </div>
                  )}
 
-                 {/* TRANSIT SPECIFIC FIELDS (With New Gallery) */}
+                 {/* TRANSIT SPECIFIC FIELDS (Clean Form Without Images) */}
                  {selectedCategory === 'transit' && (
-                   <div className="space-y-4 animate-in fade-in">
-                      {/* أسطول النقل البري - الصور الحقيقية */}
-                      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide px-1">
-                         <div className="min-w-[160px] flex-1 h-28 rounded-2xl overflow-hidden border border-indigo-500/30 shadow-lg relative bg-white/5 flex items-center justify-center text-center">
-                            {/* تم إزالة الصور البديلة لتظهر صورك أنت حصراً */}
-                            <img src="/c13.jpg" alt="سيارات عائلية جيب" className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-transparent to-transparent flex items-end p-3">
-                               <span className="text-[10px] font-black text-white drop-shadow-md">سيارات جيب عائلية</span>
-                            </div>
+                   <div className="space-y-3 p-4 bg-indigo-500/5 rounded-3xl border border-indigo-500/10">
+                      <div className="grid grid-cols-2 gap-3">
+                         <input name="fromLocation" required placeholder="مكان الانطلاق" defaultValue={bookingItem?.fromLocation || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500" />
+                         <input name="toLocation" required placeholder="الوجهة" defaultValue={bookingItem?.toLocation || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                         <div className="space-y-1">
+                            <label className="text-[9px] text-indigo-500/50 mr-2">تاريخ الرحلة</label>
+                            <input name="tripDate" type="date" required defaultValue={bookingItem?.tripDate || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-indigo-500" />
                          </div>
-                         <div className="min-w-[160px] flex-1 h-28 rounded-2xl overflow-hidden border border-indigo-500/30 shadow-lg relative bg-white/5 flex items-center justify-center text-center">
-                            {/* تم إزالة الصور البديلة لتظهر صورك أنت حصراً */}
-                            <img src="/c16.jpg" alt="سيارات سيدان" className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-transparent to-transparent flex items-end p-3">
-                               <span className="text-[10px] font-black text-white drop-shadow-md">سيارات سيدان VIP</span>
-                            </div>
+                         <div className="space-y-1">
+                            <label className="text-[9px] text-indigo-500/50 mr-2">توقيت الرحلة</label>
+                            <input name="tripTime" type="time" required defaultValue={bookingItem?.tripTime || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-indigo-500" />
                          </div>
                       </div>
-
-                      <div className="space-y-3 p-4 bg-indigo-500/5 rounded-3xl border border-indigo-500/10">
-                          <div className="grid grid-cols-2 gap-3">
-                             <input name="fromLocation" required placeholder="مكان الانطلاق" defaultValue={bookingItem?.fromLocation || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500" />
-                             <input name="toLocation" required placeholder="الوجهة" defaultValue={bookingItem?.toLocation || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500" />
+                      <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1 text-right">
+                              <label className="text-[9px] text-indigo-500/50 mr-2 font-bold">عدد الركاب</label>
+                              <select name="transitType" required defaultValue={bookingItem?.transitType || "راكب واحد"} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
+                                 <option value="راكب واحد">راكب واحد</option>
+                                 <option value="راكبين">راكبين</option>
+                                 <option value="سيارة كاملة">سيارة كاملة</option>
+                              </select>
                           </div>
-                          <div className="grid grid-cols-2 gap-3">
-                             <div className="space-y-1">
-                                <label className="text-[9px] text-indigo-500/50 mr-2">تاريخ الرحلة</label>
-                                <input name="tripDate" type="date" required defaultValue={bookingItem?.tripDate || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-indigo-500" />
-                             </div>
-                             <div className="space-y-1">
-                                <label className="text-[9px] text-indigo-500/50 mr-2">توقيت الرحلة</label>
-                                <input name="tripTime" type="time" required defaultValue={bookingItem?.tripTime || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-indigo-500" />
-                             </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1 text-right">
-                                  <label className="text-[9px] text-indigo-500/50 mr-2 font-bold">عدد الركاب</label>
-                                  <select name="transitType" required defaultValue={bookingItem?.transitType || "راكب واحد"} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
-                                     <option value="راكب واحد">راكب واحد</option>
-                                     <option value="راكبين">راكبين</option>
-                                     <option value="سيارة كاملة">سيارة كاملة</option>
-                                  </select>
-                              </div>
-                              <div className="space-y-1 text-right">
-                                  <label className="text-[9px] text-indigo-500/50 mr-2 font-bold">عدد الحقائب</label>
-                                  <select name="bagsCount" required defaultValue={bookingItem?.bagsCount || "1"} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
-                                     <option value="1">1</option>
-                                     <option value="2">2</option>
-                                     <option value="3">3</option>
-                                  </select>
-                              </div>
+                          <div className="space-y-1 text-right">
+                              <label className="text-[9px] text-indigo-500/50 mr-2 font-bold">عدد الحقائب</label>
+                              <select name="bagsCount" required defaultValue={bookingItem?.bagsCount || "1"} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
+                                 <option value="1">1</option>
+                                 <option value="2">2</option>
+                                 <option value="3">3</option>
+                              </select>
                           </div>
                       </div>
                    </div>
