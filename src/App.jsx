@@ -37,6 +37,15 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = 'shahba-go-ht';
 
+// 🛑 === قائمة حسابات الإدارة (يمكنك وضع إيميل أو رقم هاتف مع الرمز الدولي) === 🛑
+// العدد المحدد هو 4 حسابات كما طلبت
+const ADMIN_ACCOUNTS = [
+  'yahya.tatari93@gmail.com', // حساب 1 (إيميل)
+  'manager@ht.com',           // حساب 2 (إيميل)
+  '+963944299060',            // حساب 3 (رقم هاتف - مثال)
+  '+963987654321'             // حساب 4 (رقم هاتف - مثال)
+];
+
 // --- HT Custom Logo Component ---
 const HTLogo = ({ size = "normal" }) => {
   const dims = size === 'large' ? 'w-24 h-24 text-5xl rounded-[2rem]' : 'w-10 h-10 text-xl rounded-xl';
@@ -109,8 +118,17 @@ export default function App() {
   const [selectedCity, setSelectedCity] = useState(null);
   const [selectedHotel, setSelectedHotel] = useState(null);
   const [selectedBusType, setSelectedBusType] = useState(null);
+  
   const [user, setUser] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  
+  // نظام الصلاحيات الجديد يدعم الإيميل ورقم الهاتف
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  
+  const isUserAdmin = user && (
+    (user.email && ADMIN_ACCOUNTS.includes(user.email.toLowerCase())) ||
+    (user.phoneNumber && ADMIN_ACCOUNTS.includes(user.phoneNumber))
+  );
+
   const [adminTab, setAdminTab] = useState('orders'); 
   const [orderFilter, setOrderFilter] = useState('all'); 
 
@@ -144,11 +162,11 @@ export default function App() {
 
   const isFirstOrdersLoad = useRef(true);
   const isFirstEventsLoad = useRef(true);
-  const isAdminRef = useRef(isAdmin);
+  const isAdminRef = useRef(isUserAdmin);
 
   useEffect(() => {
-    isAdminRef.current = isAdmin;
-  }, [isAdmin]);
+    isAdminRef.current = isUserAdmin;
+  }, [isUserAdmin]);
 
   useEffect(() => {
     let viewportMeta = document.querySelector('meta[name="viewport"]');
@@ -238,13 +256,24 @@ export default function App() {
           setAuthEmail('');
           setAuthPassword('');
       } catch (err) {
-          setAuthError('بيانات الدخول غير صحيحة، يرجى التأكد والمحاولة مجدداً.');
+          console.error(err);
+          if (err.code === 'auth/weak-password') {
+              setAuthError('كلمة المرور ضعيفة جداً. يجب أن تتكون من 6 أحرف أو أرقام على الأقل.');
+          } else if (err.code === 'auth/email-already-in-use') {
+              setAuthError('هذا البريد الإلكتروني مسجل لدينا بالفعل. الرجاء تسجيل الدخول بدلاً من ذلك.');
+          } else if (err.code === 'auth/invalid-email') {
+              setAuthError('صيغة البريد الإلكتروني غير صحيحة.');
+          } else if (err.code === 'auth/operation-not-allowed') {
+              setAuthError('تسجيل الدخول بالبريد غير مفعل من الإدارة. يرجى تفعيله من Firebase.');
+          } else {
+              setAuthError('بيانات الدخول غير صحيحة، يرجى التأكد والمحاولة مجدداً.');
+          }
       }
   };
 
   const handleLogout = async () => {
       await signOut(auth);
-      setIsAdmin(false);
+      setShowAdminPanel(false);
       setActiveView('main');
   };
 
@@ -470,7 +499,7 @@ export default function App() {
 
       {/* Header */}
       <header className="p-5 sticky top-10 z-50 bg-[#0B192C]/95 backdrop-blur-xl border-b border-white/5 flex justify-between items-center shadow-xl">
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => {setActiveView('main'); setIsAdmin(false); setSelectedCategory(null); setSelectedHotel(null); setSelectedCity(null); setSelectedBusType(null);}}>
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => {setActiveView('main'); setShowAdminPanel(false); setSelectedCategory(null); setSelectedHotel(null); setSelectedCity(null); setSelectedBusType(null);}}>
            <HTLogo />
            <div className="flex flex-col text-right">
                 <h1 className="text-lg font-black italic text-white leading-none">شهبا <span className="text-emerald-400">Go</span></h1>
@@ -478,16 +507,21 @@ export default function App() {
            </div>
         </div>
         <div className="flex items-center gap-2">
-            {!isAdmin && (
+            {(!isUserAdmin || !showAdminPanel) && (
                 <button onClick={() => {setActiveView('wallet'); setSelectedCategory(null);}} className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 rounded-xl text-emerald-400 hover:bg-emerald-500/30 transition-colors">
                     <Gift size={14}/>
                     <span className="text-[10px] font-black">{user?.isAnonymous ? '0' : userPoints}</span>
                 </button>
             )}
-            <button onClick={() => setIsAdmin(!isAdmin)} className={`px-4 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border transition-all ${isAdmin ? 'bg-amber-500/10 text-amber-400 border-amber-500/50' : 'bg-white/5 border-white/10 text-slate-300'}`}>
-               {isAdmin ? <LayoutGrid size={14} /> : <Settings size={14}/>}
-               {isAdmin ? 'المتجر' : 'الإدارة'}
-            </button>
+            
+            {/* زر الإدارة يظهر فقط إذا كان الإيميل أو رقم الهاتف مسجلاً في قائمة الإدارة */}
+            {isUserAdmin && (
+                <button onClick={() => setShowAdminPanel(!showAdminPanel)} className={`px-4 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border transition-all ${showAdminPanel ? 'bg-amber-500/10 text-amber-400 border-amber-500/50' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'}`}>
+                   {showAdminPanel ? <LayoutGrid size={14} /> : <Settings size={14}/>}
+                   {showAdminPanel ? 'المتجر' : 'الإدارة'}
+                </button>
+            )}
+
             {user?.isAnonymous ? (
                 <button onClick={() => setAuthModal('login')} className="px-3 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border border-white/10 bg-white/5 text-slate-300">
                     <LogIn size={14} /> دخول
@@ -509,17 +543,17 @@ export default function App() {
               <h2 className="text-xl font-black text-white mb-6">{authModal === 'login' ? 'تسجيل الدخول' : 'حساب جديد'}</h2>
               {authError && <div className="bg-rose-500/10 text-rose-400 p-3 rounded-xl text-xs font-bold mb-4">{authError}</div>}
               <form onSubmit={handleAuthSubmit} className="space-y-4">
-                  <input type="email" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none" placeholder="البريد الإلكتروني" />
-                  <input type="password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none" placeholder="كلمة المرور" />
-                  <button type="submit" className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg">تأكيد</button>
+                  <input type="email" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="البريد الإلكتروني" />
+                  <input type="password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="كلمة المرور" />
+                  <button type="submit" className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all">تأكيد</button>
               </form>
-              <button onClick={() => setAuthModal(authModal === 'login' ? 'signup' : 'login')} className="mt-6 text-[10px] text-white/40 hover:text-white">حساب جديد</button>
+              <button onClick={() => setAuthModal(authModal === 'login' ? 'signup' : 'login')} className="mt-6 text-[10px] text-white/40 hover:text-white transition-colors">تبديل العملية</button>
            </div>
         </div>
       )}
 
       <main className="p-4 max-w-5xl mx-auto">
-        {isAdmin ? (
+        {showAdminPanel && isUserAdmin ? (
           /* ADMIN VIEW */
           <div className="space-y-6 animate-in">
              <div className="flex bg-[#0F172A] p-1.5 rounded-2xl border border-white/5 mb-4">
@@ -619,12 +653,10 @@ export default function App() {
           /* USER VIEWS */
           <div className="space-y-6 pb-10">
             {activeView === 'main' && (
-              <div className="space-y-6 max-w-xl mx-auto animate-in">
-                
+              <div className="space-y-6 max-w-xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <div className="relative rounded-[3rem] overflow-hidden aspect-[16/9] border border-white/5 shadow-2xl">
-                   {/* ملاحظة لشركة HT: ضع رابط الصورة الخاصة بدوار برج القلعة الجديد هنا بمجرد التقاطها ورفعها */}
-                   <img src="https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800" className="w-full h-full object-cover opacity-50" alt="دوار برج القلعة" onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=800'; }}/>
-                   <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/30 to-transparent"></div>
+                   <img src="/main-bg.jpg?v=3" className="w-full h-full object-cover opacity-50" alt="Travel Hero"/>
+                   <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-transparent"></div>
                    <div className="absolute top-6 left-6"><HTLogo /></div>
                    <div className="absolute bottom-6 right-6 text-right">
                       <h2 className="text-3xl font-black italic uppercase leading-none">شهبا <span className="text-emerald-400">Go</span></h2>
@@ -643,11 +675,16 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                    {CATEGORIES.map(cat => (
                      <button key={cat.id} disabled={!cat.active} onClick={() => {
-                         setSelectedCategory(cat.id); 
-                         setActiveView('list'); 
-                         setSelectedHotel(null); 
-                         setSelectedCity(null); 
-                         setSelectedBusType(null);
+                         if (cat.id === 'transit') {
+                             setSelectedCategory('transit');
+                             setBookingItem({ title: 'طلب خدمة النقل البري' });
+                         } else {
+                             setSelectedCategory(cat.id); 
+                             setActiveView('list'); 
+                             setSelectedHotel(null); 
+                             setSelectedCity(null); 
+                             setSelectedBusType(null);
+                         }
                      }} 
                        className={`p-5 rounded-[2.5rem] flex flex-col items-center justify-center text-center gap-3 border transition-all ${cat.active ? 'bg-white/5 border-white/10 shadow-lg hover:bg-white/10 active:scale-95' : 'opacity-40 grayscale'}`}>
                         <div className={`w-14 h-14 bg-gradient-to-br ${cat.color} rounded-2xl flex items-center justify-center text-white shadow-md`}><cat.icon size={26} /></div>
@@ -714,8 +751,8 @@ export default function App() {
                     {selectedCategory === 'transit' && (
                         <div className="space-y-4 animate-in fade-in">
                             <div className="relative bg-[#112240] w-full h-[400px] rounded-[3rem] overflow-hidden shadow-2xl border border-indigo-500/20 group">
-                                {/* صورة الخلفية - تستخدم الصورة التي رفعتها */}
-                                <img src="/c13.jpg" alt="النقل البري" className="absolute inset-0 w-full h-full object-cover opacity-50" onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1590362891991-f776e747a588?q=80&w=800'; }}/>
+                                {/* تم إزالة كود الخطأ لكي يضطر المتصفح لعرض صورتك حصراً */}
+                                <img src="/c13.jpg" alt="النقل البري" className="absolute inset-0 w-full h-full object-cover opacity-50" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/60 to-transparent"></div>
                                 
                                 <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
@@ -1107,13 +1144,13 @@ export default function App() {
 
       {/* Main Navigation Bar */}
       <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-[#112240]/95 backdrop-blur-3xl border border-white/5 rounded-[3.5rem] p-4 flex justify-around shadow-2xl z-[500] border-t border-emerald-500/10">
-         <button onClick={() => {setActiveView('main'); setIsAdmin(false); setSelectedCategory(null); setSelectedHotel(null); setSelectedCity(null); setSelectedBusType(null);}} className={`${activeView === 'main' && !isAdmin ? 'text-emerald-400 scale-110 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'text-white/30'} flex flex-col items-center gap-1.5 transition-all duration-300`}>
+         <button onClick={() => {setActiveView('main'); setShowAdminPanel(false); setSelectedCategory(null); setSelectedHotel(null); setSelectedCity(null); setSelectedBusType(null);}} className={`${activeView === 'main' && !showAdminPanel ? 'text-emerald-400 scale-110 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'text-white/30'} flex flex-col items-center gap-1.5 transition-all duration-300`}>
             <LayoutGrid size={22}/><span className="text-[8px] font-black uppercase">الرئيسية</span>
          </button>
-         <button onClick={() => {setActiveView('bookings'); setIsAdmin(false);}} className={`${activeView === 'bookings' && !isAdmin ? 'text-emerald-400 scale-110 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'text-white/30'} flex flex-col items-center gap-1.5 transition-all duration-300`}>
+         <button onClick={() => {setActiveView('bookings'); setShowAdminPanel(false);}} className={`${activeView === 'bookings' && !showAdminPanel ? 'text-emerald-400 scale-110 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'text-white/30'} flex flex-col items-center gap-1.5 transition-all duration-300`}>
             <Ticket size={22}/><span className="text-[8px] font-black uppercase">طلباتي</span>
          </button>
-         <button onClick={() => {setSelectedCategory('events'); setActiveView('list'); setIsAdmin(false);}} className={`${selectedCategory === 'events' ? 'text-emerald-400 scale-110 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'text-white/30'} flex flex-col items-center gap-1.5 transition-all duration-300`}>
+         <button onClick={() => {setSelectedCategory('events'); setActiveView('list'); setShowAdminPanel(false);}} className={`${selectedCategory === 'events' ? 'text-emerald-400 scale-110 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'text-white/30'} flex flex-col items-center gap-1.5 transition-all duration-300`}>
             <Megaphone size={22}/><span className="text-[8px] font-black uppercase">الفعاليات</span>
          </button>
       </nav>
