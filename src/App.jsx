@@ -17,7 +17,7 @@ import {
   BedDouble, Users, Star, Building2, Calendar,
   UserCheck, UserX, ClipboardList, Trash2,
   RotateCcw, Baby, Tent, Ship,
-  PartyPopper, Plane, FileText, Globe,
+  PartyPopper, Plane, FileText, Globe, CarFront,
   Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock, Download, Share, MoreVertical, BellRing, CheckCircle
 } from 'lucide-react';
 
@@ -55,7 +55,7 @@ const CATEGORIES = [
   { id: 'bus', title: 'خدمات الباصات', sub: 'عقود ورحلات ترفيهية', icon: Bus, color: 'from-blue-500 to-indigo-700', active: true },
   { id: 'hotel', title: 'الفنادق', sub: 'حجز في كافة المحافظات', icon: Hotel, color: 'from-amber-500 to-orange-700', active: true },
   { id: 'flights', title: 'حجز طيران', sub: 'رحلات داخلية ودولية', icon: Plane, color: 'from-cyan-500 to-blue-600', active: true },
-  { id: 'transit', title: 'سفريات', sub: 'توصيل بين المحافظات وبيروت', icon: Globe, color: 'from-indigo-500 to-purple-600', active: true },
+  { id: 'transit', title: 'خدمة النقل البري', sub: 'من البيت إلى البيت', icon: CarFront, color: 'from-indigo-500 to-purple-600', active: true },
   { id: 'services', title: 'خدمات إضافية', sub: 'فيزا، أوراق رسمية، بريد', icon: FileCheck, color: 'from-slate-500 to-gray-700', active: true }, 
   { id: 'events', title: 'الفعاليات', sub: 'رحلات وسهرات فنية', icon: Megaphone, color: 'from-rose-500 to-pink-700', active: true },
 ];
@@ -124,7 +124,6 @@ export default function App() {
   const [dynamicEvents, setDynamicEvents] = useState([]);
   const [bookingItem, setBookingItem] = useState(null);
   
-  // --- حل مشكلة الرفض: استخدام حالة منفصلة ومستقرة للسبب ---
   const [rejectModal, setRejectModal] = useState(null); 
   const [rejectReasonText, setRejectReasonText] = useState("");
   
@@ -134,7 +133,6 @@ export default function App() {
   const [userPoints, setUserPoints] = useState(250); 
   const [redeemSuccess, setRedeemSuccess] = useState(null);
 
-  // --- نظام الإشعارات (Toasts) ---
   const [toasts, setToasts] = useState([]);
   const addToast = (msg, type = 'info', title = '') => {
     const id = Date.now();
@@ -256,7 +254,6 @@ export default function App() {
     const formData = new FormData(e.target);
     const formValues = Object.fromEntries(formData.entries());
 
-    // التحقق من صحة الأرقام المدخلة
     const numberFields = ['paxCount', 'workerCount', 'busCount', 'nightCount'];
     for (let field of numberFields) {
        if (formValues[field] !== undefined && formValues[field] !== "") {
@@ -387,7 +384,7 @@ export default function App() {
     if (order.serviceType === 'bus' && order.busSubCategory === 'contract') return `${order.orgName} | باصات: ${order.busCount}`;
     if (order.serviceType === 'bus') return `ترفيهي: ${order.tripDate}`;
     if (order.serviceType === 'flights') return `من ${order.fromAirport} لـ ${order.toAirport} بتاريخ ${order.flightDate}`;
-    if (order.serviceType === 'transit') return `من ${order.fromLocation} إلى ${order.toLocation}`;
+    if (order.serviceType === 'transit') return `من ${order.fromLocation} إلى ${order.toLocation} | ${order.transitType} | حقائب: ${order.bagsCount || '1'} | موعد: ${order.tripDate} ${order.tripTime}`;
     if (order.serviceType === 'services') return `الخدمة المطلوبة مسجلة`;
     if (order.serviceType === 'events') return `عدد: ${order.paxCount}`;
     return 'تفاصيل عامة';
@@ -625,8 +622,8 @@ export default function App() {
               <div className="space-y-6 max-w-xl mx-auto animate-in">
                 
                 <div className="relative rounded-[3rem] overflow-hidden aspect-[16/9] border border-white/5 shadow-2xl">
-                   {/* ملاحظة: ضع رابط الصورة المصممة خصيصاً (قلعة حلب + أودي + باص) هنا مكان الرابط الحالي */}
-                   <img src="https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800" className="w-full h-full object-cover opacity-50" alt="Aleppo Citadel" onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=800'; }}/>
+                   {/* ملاحظة لشركة HT: ضع رابط الصورة الخاصة بدوار برج القلعة الجديد هنا بمجرد التقاطها ورفعها */}
+                   <img src="https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800" className="w-full h-full object-cover opacity-50" alt="دوار برج القلعة" onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=800'; }}/>
                    <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/30 to-transparent"></div>
                    <div className="absolute top-6 left-6"><HTLogo /></div>
                    <div className="absolute bottom-6 right-6 text-right">
@@ -645,7 +642,19 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-4">
                    {CATEGORIES.map(cat => (
-                     <button key={cat.id} disabled={!cat.active} onClick={() => {setSelectedCategory(cat.id); setActiveView('list'); setSelectedHotel(null); setSelectedCity(null); setSelectedBusType(null);}} 
+                     <button key={cat.id} disabled={!cat.active} onClick={() => {
+                         if (cat.id === 'transit') {
+                             // فتح نموذج الحجز لخدمة النقل البري مباشرة
+                             setSelectedCategory('transit');
+                             setBookingItem({ title: 'طلب خدمة النقل البري' });
+                         } else {
+                             setSelectedCategory(cat.id); 
+                             setActiveView('list'); 
+                             setSelectedHotel(null); 
+                             setSelectedCity(null); 
+                             setSelectedBusType(null);
+                         }
+                     }} 
                        className={`p-5 rounded-[2.5rem] flex flex-col items-center justify-center text-center gap-3 border transition-all ${cat.active ? 'bg-white/5 border-white/10 shadow-lg hover:bg-white/10 active:scale-95' : 'opacity-40 grayscale'}`}>
                         <div className={`w-14 h-14 bg-gradient-to-br ${cat.color} rounded-2xl flex items-center justify-center text-white shadow-md`}><cat.icon size={26} /></div>
                         <div className="flex-1">
@@ -704,16 +713,6 @@ export default function App() {
                             <button onClick={openWhatsApp} className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 py-4 rounded-2xl font-black text-xs flex items-center justify-center gap-2 hover:bg-emerald-500 hover:text-black transition-all mt-3">
                                 <MessageCircle size={18}/> دردشة لمعرفة الرحلات
                             </button>
-                        </div>
-                    )}
-
-                    {/* TRANSIT */}
-                    {selectedCategory === 'transit' && (
-                        <div className="bg-[#112240] p-8 rounded-[3rem] text-center shadow-xl border border-white/5">
-                            <Globe size={48} className="mx-auto text-indigo-400 mb-4 animate-pulse" />
-                            <h3 className="font-black text-lg">سفريات المحافظات</h3>
-                            <p className="text-xs text-white/50 px-4 mt-2 mb-6 leading-relaxed">نقل آمن ومريح بسيارات VIP عادية أو سيارات جيب.</p>
-                            <button onClick={() => setBookingItem({title: 'رحلة سفر'})} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black mt-4 shadow-lg active:scale-95 transition-all">حجز رحلة</button>
                         </div>
                     )}
 
@@ -898,22 +897,61 @@ export default function App() {
                    </div>
                  )}
 
-                 {/* TRANSIT SPECIFIC FIELDS */}
+                 {/* TRANSIT SPECIFIC FIELDS (With New Gallery) */}
                  {selectedCategory === 'transit' && (
-                   <div className="space-y-3 p-4 bg-indigo-500/5 rounded-3xl border border-indigo-500/10">
-                      <div className="grid grid-cols-2 gap-3">
-                         <input name="fromLocation" required placeholder="مكان الانطلاق" defaultValue={bookingItem?.fromLocation || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500" />
-                         <input name="toLocation" required placeholder="الوجهة" defaultValue={bookingItem?.toLocation || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500" />
+                   <div className="space-y-4 animate-in fade-in">
+                      {/* أسطول النقل البري - الصور الحقيقية */}
+                      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide px-1">
+                         <div className="min-w-[160px] flex-1 h-28 rounded-2xl overflow-hidden border border-indigo-500/30 shadow-lg relative bg-white/5 flex items-center justify-center text-center">
+                            {/* تم إزالة الصور البديلة لتظهر صورك أنت حصراً */}
+                            <img src="/c13.jpg" alt="سيارات عائلية جيب" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-transparent to-transparent flex items-end p-3">
+                               <span className="text-[10px] font-black text-white drop-shadow-md">سيارات جيب عائلية</span>
+                            </div>
+                         </div>
+                         <div className="min-w-[160px] flex-1 h-28 rounded-2xl overflow-hidden border border-indigo-500/30 shadow-lg relative bg-white/5 flex items-center justify-center text-center">
+                            {/* تم إزالة الصور البديلة لتظهر صورك أنت حصراً */}
+                            <img src="/c16.jpg" alt="سيارات سيدان" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-transparent to-transparent flex items-end p-3">
+                               <span className="text-[10px] font-black text-white drop-shadow-md">سيارات سيدان VIP</span>
+                            </div>
+                         </div>
                       </div>
-                      <select name="transitType" required defaultValue={bookingItem?.transitType || "راكب واحد"} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
-                         <option value="راكب واحد">راكب واحد</option>
-                         <option value="راكبين">راكبين</option>
-                         <option value="سيارة كاملة">سيارة كاملة</option>
-                      </select>
-                      <select name="carTypePreference" required defaultValue={bookingItem?.carTypePreference || "normal"} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
-                         <option value="normal">سيارة VIP عادية</option>
-                         <option value="jeep">تفضيل سيارة جيب (Jeep)</option>
-                      </select>
+
+                      <div className="space-y-3 p-4 bg-indigo-500/5 rounded-3xl border border-indigo-500/10">
+                          <div className="grid grid-cols-2 gap-3">
+                             <input name="fromLocation" required placeholder="مكان الانطلاق" defaultValue={bookingItem?.fromLocation || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500" />
+                             <input name="toLocation" required placeholder="الوجهة" defaultValue={bookingItem?.toLocation || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                             <div className="space-y-1">
+                                <label className="text-[9px] text-indigo-500/50 mr-2">تاريخ الرحلة</label>
+                                <input name="tripDate" type="date" required defaultValue={bookingItem?.tripDate || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-indigo-500" />
+                             </div>
+                             <div className="space-y-1">
+                                <label className="text-[9px] text-indigo-500/50 mr-2">توقيت الرحلة</label>
+                                <input name="tripTime" type="time" required defaultValue={bookingItem?.tripTime || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-indigo-500" />
+                             </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1 text-right">
+                                  <label className="text-[9px] text-indigo-500/50 mr-2 font-bold">عدد الركاب</label>
+                                  <select name="transitType" required defaultValue={bookingItem?.transitType || "راكب واحد"} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
+                                     <option value="راكب واحد">راكب واحد</option>
+                                     <option value="راكبين">راكبين</option>
+                                     <option value="سيارة كاملة">سيارة كاملة</option>
+                                  </select>
+                              </div>
+                              <div className="space-y-1 text-right">
+                                  <label className="text-[9px] text-indigo-500/50 mr-2 font-bold">عدد الحقائب</label>
+                                  <select name="bagsCount" required defaultValue={bookingItem?.bagsCount || "1"} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
+                                     <option value="1">1</option>
+                                     <option value="2">2</option>
+                                     <option value="3">3</option>
+                                  </select>
+                              </div>
+                          </div>
+                      </div>
                    </div>
                  )}
 
@@ -1019,7 +1057,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Admin Rejection Modal (Fixed & Improved) */}
+      {/* Admin Rejection Modal */}
       {rejectModal && (
         <div className="fixed inset-0 bg-black/95 z-[7000] flex items-center justify-center p-6">
            <div className="bg-[#112240] w-full max-w-sm p-8 rounded-[2.5rem] border border-rose-500/20 space-y-4 shadow-2xl animate-in zoom-in-95">
@@ -1084,9 +1122,20 @@ export default function App() {
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
-        * { font-family: 'Cairo', sans-serif; -webkit-tap-highlight-color: transparent; }
-        input[type="date"], input[type="time"] { color-scheme: dark; }
-        .animate-in { animation: fadeIn 0.3s ease-out; }
+        * { font-family: 'Cairo', sans-serif; -webkit-tap-highlight-color: transparent; scroll-behavior: smooth; }
+        input[type="date"], input[type="time"], input[type="number"], input[type="email"], input[type="password"] { color-scheme: dark; }
+        input[type="date"]::-webkit-calendar-picker-indicator,
+        input[type="time"]::-webkit-calendar-picker-indicator {
+            background-color: #10b981;
+            padding: 4px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        input[type="date"]:focus, input[type="time"]:focus {
+            background-color: #064e3b !important;
+            border-color: #10b981 !important;
+        }
+        .animate-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-marquee { animation: marquee 20s linear infinite; }
         @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
