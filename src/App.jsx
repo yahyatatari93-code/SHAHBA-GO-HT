@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, addDoc, onSnapshot, 
-  query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc
+  query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, setDoc
 } from 'firebase/firestore';
 import { 
   getAuth, signInAnonymously, onAuthStateChanged, 
@@ -60,7 +60,7 @@ const HTLogo = ({ size = "normal" }) => {
 
 // --- Global Data Structures ---
 const CATEGORIES = [
-  { id: 'car', title: 'أجار سيارات', sub: 'يومي، أسبوعي، شهري', icon: Car, color: 'from-emerald-500 to-teal-700', active: true },
+  { id: 'car', title: 'آجار سيارات', sub: 'يومي، أسبوعي، شهري', icon: Car, color: 'from-emerald-500 to-teal-700', active: true },
   { id: 'bus', title: 'خدمات الباصات', sub: 'عقود ورحلات ترفيهية', icon: Bus, color: 'from-blue-500 to-indigo-700', active: true },
   { id: 'hotel', title: 'الفنادق', sub: 'حجز في كافة المحافظات', icon: Hotel, color: 'from-amber-500 to-orange-700', active: true },
   { id: 'flights', title: 'حجز طيران', sub: 'رحلات داخلية ودولية', icon: Plane, color: 'from-cyan-500 to-blue-600', active: true },
@@ -149,6 +149,8 @@ export default function App() {
   const [allOrders, setAllOrders] = useState([]);
   const [userOrders, setUserOrders] = useState([]);
   const [dynamicEvents, setDynamicEvents] = useState([]);
+  const [carsList, setCarsList] = useState(CAR_MODELS); // حالة إدارة السيارات مع الأسعار
+  const [editingCar, setEditingCar] = useState(null); // نافذة تعديل سعر السيارة
   const [bookingItem, setBookingItem] = useState(null);
   
   const [rejectModal, setRejectModal] = useState(null); 
@@ -206,7 +208,21 @@ export default function App() {
       if (currentUser) setUser(currentUser);
     });
 
-    return () => { clearTimeout(timer); unsubAuth(); };
+    // استدعاء معلومات أسعار السيارات مباشرة
+    const unsubCars = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'cars'), (snap) => {
+        if (!snap.empty) {
+            const dbCars = snap.docs.map(d => ({id: d.id, ...d.data()}));
+            const mergedCars = CAR_MODELS.map(defaultCar => {
+                const dbCar = dbCars.find(c => c.id === defaultCar.id);
+                return dbCar ? dbCar : defaultCar;
+            });
+            setCarsList(mergedCars);
+        } else {
+            setCarsList(CAR_MODELS);
+        }
+    }, (err) => console.error(err));
+
+    return () => { clearTimeout(timer); unsubAuth(); unsubCars(); };
   }, []);
 
   useEffect(() => {
@@ -301,6 +317,20 @@ export default function App() {
       setActiveView('main');
   };
 
+  const handleSaveCarPrice = async (e) => {
+      e.preventDefault();
+      if (!user) return;
+      const newPrice = e.target.price.value;
+      try {
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'cars', editingCar.id), { ...editingCar, price: newPrice }, { merge: true });
+          setEditingCar(null);
+          addToast('تم تحديث سعر السيارة بنجاح', 'success');
+      } catch (error) {
+          console.error("Error updating price:", error);
+          addToast('حدث خطأ أثناء التحديث', 'error');
+      }
+  };
+
   const submitBooking = async (e) => {
     e.preventDefault();
     if (!user) return;
@@ -327,7 +357,7 @@ export default function App() {
         title = bookingItem.serviceTitle;
     } else {
         if (selectedCategory === 'hotel') title = `حجز ${selectedHotel?.name} - ${bookingItem?.name}`;
-        if (selectedCategory === 'car') title = `أجار سيارة: ${bookingItem?.name}`;
+        if (selectedCategory === 'car') title = `آجار سيارة: ${bookingItem?.name}`;
     }
 
     const orderData = {
@@ -445,7 +475,7 @@ export default function App() {
 
   const renderOrderInfo = (order) => {
     if (order.serviceType === 'reward') return `استبدال هدية (${order.pointsUsed} نقطة)`;
-    if (order.serviceType === 'car') return `المدة: ${order.rentDuration === 'daily' ? 'يومي' : order.rentDuration === 'weekly' ? 'أسبوعي' : 'شهري'} | السائق: ${order.driverOption === 'with_driver' ? 'مع سائق' : 'بدون'}`;
+    if (order.serviceType === 'car') return `المدة: ${order.rentDuration === 'daily' ? 'يومي' : order.rentDuration === 'weekly' ? 'أسبوعي' : 'شهري'} | السائق: ${order.driverOption === 'with_driver' ? 'مع سائق' : 'بدون'} | البدء: ${order.startDate || 'غير محدد'}`;
     if (order.serviceType === 'hotel') return `${order.checkIn} لغاية ${order.checkOut} (${order.nightCount} ليلة)`;
     if (order.serviceType === 'bus' && order.busSubCategory === 'contract') return `${order.orgName} | باصات: ${order.busCount}`;
     if (order.serviceType === 'bus') return `ترفيهي: ${order.tripDate}`;
@@ -597,6 +627,22 @@ export default function App() {
               <button onClick={() => setAuthModal(authModal === 'login' ? 'signup' : 'login')} className="mt-6 text-[10px] text-white/40 hover:text-white transition-colors">تبديل العملية</button>
            </div>
         </div>
+      )}
+
+      {/* نافذة تعديل سعر السيارة (للإدارة فقط) */}
+      {editingCar && isUserAdmin && (
+          <div className="fixed inset-0 bg-black/95 z-[8000] flex items-center justify-center p-6 text-right">
+             <div className="bg-[#112240] w-full max-w-sm p-8 rounded-[2.5rem] border border-emerald-500/20 shadow-2xl animate-in zoom-in-95">
+                <h3 className="text-lg font-black text-emerald-400 mb-4">تعديل سعر {editingCar.name}</h3>
+                <form onSubmit={handleSaveCarPrice}>
+                    <input name="price" defaultValue={editingCar.price} required className="w-full bg-[#0B192C] border border-white/5 rounded-2xl p-4 text-xs text-white text-right outline-none focus:border-emerald-500 mb-4 shadow-inner" placeholder="السعر الجديد (مثال: 800,000 ل.س/يوم)" />
+                    <div className="flex gap-2">
+                        <button type="submit" className="flex-1 bg-emerald-500 py-3 rounded-2xl font-black text-xs text-black shadow-lg">حفظ التعديل</button>
+                        <button type="button" onClick={() => setEditingCar(null)} className="flex-1 bg-white/5 py-3 rounded-2xl font-black text-xs text-white">إلغاء</button>
+                    </div>
+                </form>
+             </div>
+          </div>
       )}
 
       <main className="p-4 max-w-5xl mx-auto">
@@ -854,12 +900,22 @@ export default function App() {
                         </div>
                     )}
 
-                    {/* CARS */}
-                    {selectedCategory === 'car' && CAR_MODELS.map(car => (
+                    {/* CARS (مع إضافة السعر فوق الصورة وزر التعديل للإدارة) */}
+                    {selectedCategory === 'car' && carsList.map(car => (
                         <div key={car.id} className="bg-[#112240] rounded-[2.5rem] overflow-hidden p-4 shadow-lg border border-white/5 group hover:border-emerald-500/30 transition-all">
-                           <img src={car.img} className="w-full h-44 object-cover rounded-[2rem] mb-4" alt={car.name}/>
+                           <div className="relative">
+                               <img src={car.img} className="w-full h-44 object-cover rounded-[2rem] mb-4" alt={car.name}/>
+                               <div className="absolute top-4 right-4 bg-black/80 backdrop-blur-md text-emerald-400 px-3 py-1.5 rounded-2xl font-black text-xs border border-emerald-500/30 flex items-center gap-2 shadow-lg">
+                                   {car.price}
+                                   {isUserAdmin && (
+                                       <button onClick={(e) => { e.stopPropagation(); setEditingCar(car); }} className="text-white hover:text-emerald-400 transition-colors bg-white/10 p-1 rounded-md" title="تعديل السعر">
+                                           <Settings size={12}/>
+                                       </button>
+                                   )}
+                               </div>
+                           </div>
                            <div className="flex justify-between items-center px-2">
-                              <h4 className="font-black">{car.name}</h4>
+                              <h4 className="font-black text-white">{car.name}</h4>
                               <button onClick={() => setBookingItem(car)} className="bg-emerald-500 text-black px-8 py-2.5 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all">احجز الآن</button>
                            </div>
                         </div>
@@ -1132,6 +1188,11 @@ export default function App() {
                                     <option value="without_driver">بدون سائق</option>
                                 </select>
                             </div>
+                        </div>
+                        {/* إضافة حقل تاريخ البدء كما طلبت */}
+                        <div className="space-y-1 text-right mt-3">
+                            <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">تاريخ البدء</label>
+                            <input name="startDate" type="date" required defaultValue={bookingItem?.startDate || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-emerald-500" />
                         </div>
                     </div>
                  )}
