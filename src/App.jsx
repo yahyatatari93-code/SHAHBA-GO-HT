@@ -130,7 +130,16 @@ export default function App() {
   );
 
   const [adminTab, setAdminTab] = useState('orders'); 
-  const [orderFilter, setOrderFilter] = useState('all'); 
+  const [orderFilter, setOrderFilter] = useState('pending'); 
+
+  const formatDateTime = (timestamp) => {
+    if (!timestamp || !timestamp.toDate) return 'الآن';
+    const date = timestamp.toDate();
+    return new Intl.DateTimeFormat('ar-SY', {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: true
+    }).format(date);
+  };
 
   const [authModal, setAuthModal] = useState(null); 
   const [authEmail, setAuthEmail] = useState('');
@@ -162,6 +171,7 @@ export default function App() {
 
   const isFirstOrdersLoad = useRef(true);
   const isFirstEventsLoad = useRef(true);
+  const isFirstAlertsLoad = useRef(true);
   const isAdminRef = useRef(isUserAdmin);
 
   useEffect(() => {
@@ -240,7 +250,21 @@ export default function App() {
       isFirstEventsLoad.current = false;
     }, (err) => console.error(err));
 
-    return () => { unsubOrders(); unsubEvents(); };
+    // نظام التنبيهات المباشرة الجديد
+    const qAlerts = query(collection(db, 'artifacts', appId, 'public', 'data', 'global_alerts'), orderBy('createdAt', 'desc'));
+    const unsubAlerts = onSnapshot(qAlerts, (snap) => {
+      if (!isFirstAlertsLoad.current) {
+        snap.docChanges().forEach(change => {
+           if (change.type === 'added') {
+              const data = change.doc.data();
+              addToast(data.message, data.type || 'special', 'إشعار من الإدارة 🔔');
+           }
+        });
+      }
+      isFirstAlertsLoad.current = false;
+    }, (err) => console.error(err));
+
+    return () => { unsubOrders(); unsubEvents(); unsubAlerts(); };
   }, [user]);
 
   const handleAuthSubmit = async (e) => {
@@ -406,6 +430,19 @@ export default function App() {
     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'marketing_events', id));
   };
 
+  // دالة إرسال التنبيهات الجديدة
+  const sendGlobalAlert = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'global_alerts'), {
+      message: formData.get('message'),
+      type: formData.get('type'),
+      createdAt: serverTimestamp()
+    });
+    e.target.reset();
+    addToast('تم إرسال التنبيه المباشر لجميع الزبائن المتصلين!', 'success');
+  };
+
   const renderOrderInfo = (order) => {
     if (order.serviceType === 'reward') return `استبدال هدية (${order.pointsUsed} نقطة)`;
     if (order.serviceType === 'car') return `المدة: ${order.rentDuration === 'daily' ? 'يومي' : order.rentDuration === 'weekly' ? 'أسبوعي' : 'شهري'} | السائق: ${order.driverOption === 'with_driver' ? 'مع سائق' : 'بدون'}`;
@@ -424,6 +461,16 @@ export default function App() {
       if (orderFilter !== 'all') {
           filtered = filtered.filter(o => o.status === orderFilter);
       }
+      
+      filtered.sort((a, b) => {
+          const timeA = a.createdAt?.toMillis() || 0;
+          const timeB = b.createdAt?.toMillis() || 0;
+          if (orderFilter === 'pending') {
+              return timeA - timeB; // الأقدم إلى الأحدث للطلبات الجديدة
+          }
+          return timeB - timeA; // الأحدث إلى الأقدم لباقي الحالات
+      });
+
       return filtered;
   };
 
@@ -556,19 +603,19 @@ export default function App() {
         {showAdminPanel && isUserAdmin ? (
           /* ADMIN VIEW */
           <div className="space-y-6 animate-in">
-             <div className="flex bg-[#0F172A] p-1.5 rounded-2xl border border-white/5 mb-4">
+             <div className="flex bg-[#0F172A] p-1.5 rounded-2xl border border-white/5 mb-4 gap-1">
                 <button onClick={() => setAdminTab('orders')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-bold ${adminTab === 'orders' ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500'}`}>الطلبات</button>
                 <button onClick={() => setAdminTab('marketing')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-bold ${adminTab === 'marketing' ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500'}`}>الإعلانات</button>
+                <button onClick={() => setAdminTab('alerts')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-bold ${adminTab === 'alerts' ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500'}`}><BellRing size={14}/> التنبيهات</button>
              </div>
 
              {adminTab === 'orders' ? (
                <div className="space-y-6">
                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide px-2">
                      {[
-                         { id: 'all', label: 'الكل' },
-                         { id: 'pending', label: 'قيد الانتظار' },
-                         { id: 'approved', label: 'مقبولة' },
-                         { id: 'rejected', label: 'مرفوضة' },
+                         { id: 'pending', label: 'الطلبات الجديدة' },
+                         { id: 'approved', label: 'طلبات مقبولة' },
+                         { id: 'rejected', label: 'الطلبات المرفوضة' },
                      ].map(f => (
                          <button key={f.id} onClick={() => setOrderFilter(f.id)} className={`px-4 py-2 rounded-xl text-[10px] font-black ${orderFilter === f.id ? 'bg-emerald-500 text-black shadow-lg' : 'bg-white/5 text-white/50'}`}>{f.label}</button>
                      ))}
@@ -580,8 +627,8 @@ export default function App() {
                              <th className="p-4">الخدمة</th>
                              <th className="p-4">العميل</th>
                              <th className="p-4">التفاصيل</th>
-                             <th className="p-4">الحالة</th>
-                             <th className="p-4 text-center">القرار</th>
+                             <th className="p-4">التاريخ والوقت</th>
+                             <th className="p-4 text-center">القرار / الحالة</th>
                           </tr>
                        </thead>
                        <tbody className="divide-y divide-white/5">
@@ -593,7 +640,7 @@ export default function App() {
                                   <div className="text-[10px] text-white/40">{order.phone}</div>
                                </td>
                                <td className="p-4 text-white/60">{renderOrderInfo(order)}</td>
-                               <td className="p-4"><StatusBadge status={order.status} /></td>
+                               <td className="p-4 text-white/60 text-[10px] whitespace-nowrap">{formatDateTime(order.createdAt)}</td>
                                <td className="p-4 text-center">
                                   {order.status === 'pending' && (
                                     <div className="flex gap-2 justify-center">
@@ -601,8 +648,12 @@ export default function App() {
                                        <button onClick={() => setRejectModal(order.id)} className="p-2 bg-rose-500 text-white rounded-xl hover:scale-110 transition-all shadow-md"><X size={14}/></button>
                                     </div>
                                   )}
+                                  {order.status === 'approved' && <StatusBadge status="approved" />}
                                   {order.status === 'rejected' && (
-                                      <span className="text-[9px] text-rose-500 font-bold block max-w-[100px] overflow-hidden truncate" title={order.rejectionReason}>{order.rejectionReason}</span>
+                                      <div className="flex flex-col items-center gap-1.5 mt-1">
+                                          <StatusBadge status="rejected" />
+                                          <span className="text-[9px] text-rose-400 font-bold max-w-[120px] text-center leading-tight bg-rose-500/10 p-1.5 rounded-lg border border-rose-500/20">{order.rejectionReason || 'لم يتم ذكر سبب'}</span>
+                                      </div>
                                   )}
                                </td>
                             </tr>
@@ -611,7 +662,7 @@ export default function App() {
                     </table>
                  </div>
                </div>
-             ) : (
+             ) : adminTab === 'marketing' ? (
                 /* MARKETING FORM */
                 <div className="space-y-6 max-w-xl mx-auto">
                     <form onSubmit={addMarketingEvent} className="bg-[#112240] p-8 rounded-[3rem] border border-white/5 shadow-2xl">
@@ -647,7 +698,25 @@ export default function App() {
                         ))}
                     </div>
                 </div>
-             )}
+             ) : adminTab === 'alerts' ? (
+                /* ADMIN ALERTS FORM */
+                <div className="space-y-6 max-w-xl mx-auto animate-in slide-in-from-right-4 pb-10">
+                    <form onSubmit={sendGlobalAlert} className="bg-[#112240] p-8 rounded-[3rem] border border-emerald-500/20 shadow-2xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-bl-full pointer-events-none"></div>
+                        <h3 className="text-lg font-black text-white flex items-center gap-2 mb-2 relative z-10"><BellRing className="text-emerald-400 animate-pulse"/> إرسال تنبيه مباشر</h3>
+                        <p className="text-[10px] text-white/50 mb-6 leading-relaxed relative z-10">سيظهر هذا التنبيه فوراً كرسالة منبثقة (Popup) لجميع المستخدمين الذين يفتحون التطبيق حالياً. استخدمه للعروض السريعة والأخبار العاجلة.</p>
+                        <div className="space-y-4 relative z-10">
+                           <textarea name="message" required className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-xs text-white text-right h-24 outline-none focus:border-emerald-500 transition-all shadow-inner" placeholder="اكتب رسالة التنبيه (مثال: خصم 50% لآخر 3 مقاعد في رحلة اللاذقية اليوم!)..."></textarea>
+                           <select name="type" required className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-xs text-white text-right outline-none focus:border-emerald-500 shadow-inner appearance-none">
+                               <option value="special">تنبيه ذهبي بارز (للعروض المذهلة)</option>
+                               <option value="info">تنبيه أزرق داكن (معلومة أو خبر)</option>
+                               <option value="success">تنبيه أخضر ساطع (خبر مفرح)</option>
+                           </select>
+                           <button type="submit" className="w-full bg-emerald-500 text-black py-5 rounded-[2rem] font-black text-xs shadow-lg shadow-emerald-500/20 active:scale-95 transition-all mt-2">إرسال التنبيه الآن 🚀</button>
+                        </div>
+                    </form>
+                </div>
+             ) : null}
           </div>
         ) : (
           /* USER VIEWS */
@@ -751,7 +820,6 @@ export default function App() {
                     {selectedCategory === 'transit' && (
                         <div className="space-y-4 animate-in fade-in">
                             <div className="relative bg-[#112240] w-full h-[400px] rounded-[3rem] overflow-hidden shadow-2xl border border-indigo-500/20 group">
-                                {/* تم إزالة كود الخطأ لكي يضطر المتصفح لعرض صورتك حصراً */}
                                 <img src="/c13.jpg" alt="النقل البري" className="absolute inset-0 w-full h-full object-cover opacity-50" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/60 to-transparent"></div>
                                 
@@ -879,7 +947,8 @@ export default function App() {
                             <tr key={order.id} className="hover:bg-white/5 transition-colors">
                                <td className="p-4">
                                   <div className="font-black text-emerald-400">{order.serviceTitle}</div>
-                                  {order.status === 'rejected' && <div className="text-[9px] text-rose-400 mt-1 font-bold">السبب: {order.rejectionReason}</div>}
+                                  <div className="text-[9px] text-white/40 mt-1 font-bold">{formatDateTime(order.createdAt)}</div>
+                                  {order.status === 'rejected' && <div className="text-[9px] text-rose-400 mt-2 font-bold bg-rose-500/10 inline-block px-2 py-1 rounded-md">سبب الرفض: {order.rejectionReason || 'لم يذكر'}</div>}
                                </td>
                                <td className="p-4"><StatusBadge status={order.status} /></td>
                             </tr>
@@ -894,7 +963,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Unified Booking Modal with Full Details */}
+      {/* Unified Booking Modal */}
       {bookingItem && (
         <div className="fixed inset-0 bg-black/95 z-[1000] flex items-center justify-center p-4">
            <div className="bg-[#112240] w-full max-w-md p-6 rounded-[3rem] border border-white/10 relative overflow-y-auto max-h-[95vh] shadow-2xl">
@@ -952,7 +1021,7 @@ export default function App() {
                    </div>
                  )}
 
-                 {/* TRANSIT SPECIFIC FIELDS (Clean Form Without Images) */}
+                 {/* TRANSIT SPECIFIC FIELDS */}
                  {selectedCategory === 'transit' && (
                    <div className="space-y-3 p-4 bg-indigo-500/5 rounded-3xl border border-indigo-500/10">
                       <div className="grid grid-cols-2 gap-3">
