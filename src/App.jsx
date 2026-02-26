@@ -809,9 +809,8 @@ export default function App() {
                             <Plane size={48} className="mx-auto text-cyan-400 mb-4 animate-bounce" />
                             <h3 className="font-black text-lg">حجز طيران</h3>
                             <p className="text-xs text-white/50 px-4 mt-2 mb-6 leading-relaxed">حدد وجهتك وسنقوم بتزويدك بأفضل الرحلات المتوفرة.</p>
-                            <button onClick={() => setBookingItem({title: 'حجز طيران'})} className="w-full bg-cyan-600 text-white py-4 rounded-2xl font-black mt-4 shadow-lg active:scale-95 transition-all">بدء الحجز</button>
                             <button onClick={openWhatsApp} className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 py-4 rounded-2xl font-black text-xs flex items-center justify-center gap-2 hover:bg-emerald-500 hover:text-black transition-all mt-3">
-                                <MessageCircle size={18}/> دردشة لمعرفة الرحلات
+                                <MessageCircle size={18}/> اتصل بنا للحجز
                             </button>
                         </div>
                     )}
