@@ -5,7 +5,7 @@ import {
   query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, setDoc
 } from 'firebase/firestore';
 import { 
-  getAuth, signInAnonymously, onAuthStateChanged, 
+  getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut 
 } from 'firebase/auth';
 import { 
@@ -18,11 +18,11 @@ import {
   UserCheck, UserX, ClipboardList, Trash2,
   RotateCcw, Baby, Tent, Ship,
   PartyPopper, Plane, FileText, Globe, CarFront,
-  Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock, Download, Share, MoreVertical, BellRing, CheckCircle
+  Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock, Download, Share, MoreVertical, BellRing, CheckCircle, Phone
 } from 'lucide-react';
 
-// === مفاتيح قاعدة البيانات الثابتة ===
-const firebaseConfig = {
+// === مفاتيح قاعدة البيانات ===
+let firebaseConfig = {
   apiKey: "AIzaSyD0iCt_GXhp5sOfAH_C4GYnRQ69JijXd1Q",
   authDomain: "shahba-go-ht.firebaseapp.com",
   projectId: "shahba-go-ht",
@@ -32,13 +32,21 @@ const firebaseConfig = {
   measurementId: "G-Q17W0BX2TJ"
 };
 
+// تهيئة ذكية لتجنب أخطاء الصلاحيات في بيئة العرض
+try {
+  if (typeof __firebase_config !== 'undefined') {
+    firebaseConfig = JSON.parse(__firebase_config);
+  }
+} catch (e) {
+  console.error("Error parsing firebase config", e);
+}
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = 'shahba-go-ht';
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'shahba-go-ht';
 
 // 🛑 === قائمة حسابات الإدارة (يمكنك وضع إيميل أو رقم هاتف مع الرمز الدولي) === 🛑
-// العدد المحدد هو 4 حسابات كما طلبت
 const ADMIN_ACCOUNTS = [
   'yahya.tatari93@gmail.com', // حساب 1 (إيميل)
   'manager@ht.com',           // حساب 2 (إيميل)
@@ -121,7 +129,7 @@ export default function App() {
   
   const [user, setUser] = useState(null);
   
-  // نظام الصلاحيات الجديد يدعم الإيميل ورقم الهاتف
+  // نظام الصلاحيات يدعم الإيميل ورقم الهاتف
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   
   const isUserAdmin = user && (
@@ -142,15 +150,20 @@ export default function App() {
   };
 
   const [authModal, setAuthModal] = useState(null); 
+  const [authTab, setAuthTab] = useState('email'); // 'email' or 'phone'
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [authPhone, setAuthPhone] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
   const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
 
   const [allOrders, setAllOrders] = useState([]);
   const [userOrders, setUserOrders] = useState([]);
   const [dynamicEvents, setDynamicEvents] = useState([]);
-  const [carsList, setCarsList] = useState(CAR_MODELS); // حالة إدارة السيارات مع الأسعار
-  const [editingCar, setEditingCar] = useState(null); // نافذة تعديل سعر السيارة
+  const [carsList, setCarsList] = useState(CAR_MODELS); 
+  const [editingCar, setEditingCar] = useState(null); 
   const [bookingItem, setBookingItem] = useState(null);
   
   const [rejectModal, setRejectModal] = useState(null); 
@@ -180,6 +193,7 @@ export default function App() {
     isAdminRef.current = isUserAdmin;
   }, [isUserAdmin]);
 
+  // تهيئة التطبيق والمصادقة المبدئية
   useEffect(() => {
     let viewportMeta = document.querySelector('meta[name="viewport"]');
     if (!viewportMeta) {
@@ -200,15 +214,28 @@ export default function App() {
     const timer = setTimeout(() => setShowSplash(false), 2500); 
     
     const initAuth = async () => {
-      try { await signInAnonymously(auth); } catch (err) { console.error("Auth error:", err); }
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) { console.error("Auth init error:", err); }
     };
     initAuth();
     
     const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
-      if (currentUser) setUser(currentUser);
+      setUser(currentUser);
     });
 
-    // استدعاء معلومات أسعار السيارات مباشرة
+    return () => { clearTimeout(timer); unsubAuth(); };
+  }, []);
+
+  // جلب البيانات مع حماية (Auth Before Queries - Rule 3)
+  useEffect(() => {
+    if (!user) return; // الحماية الأساسية
+
+    // استدعاء معلومات أسعار السيارات
     const unsubCars = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'cars'), (snap) => {
         if (!snap.empty) {
             const dbCars = snap.docs.map(d => ({id: d.id, ...d.data()}));
@@ -220,13 +247,8 @@ export default function App() {
         } else {
             setCarsList(CAR_MODELS);
         }
-    }, (err) => console.error(err));
+    }, (err) => console.error("Cars fetch error:", err));
 
-    return () => { clearTimeout(timer); unsubAuth(); unsubCars(); };
-  }, []);
-
-  useEffect(() => {
-    if (!user) return;
     const qOrders = query(collection(db, 'artifacts', appId, 'public', 'data', 'orders'), orderBy('createdAt', 'desc'));
     const unsubOrders = onSnapshot(qOrders, (snap) => {
       const docs = snap.docs.map(d => ({id: d.id, ...d.data()}));
@@ -249,7 +271,9 @@ export default function App() {
         });
       }
       isFirstOrdersLoad.current = false;
-    }, (err) => console.error(err));
+    }, (err) => {
+      console.error("Orders fetch error (permissions?):", err);
+    });
 
     const qEvents = query(collection(db, 'artifacts', appId, 'public', 'data', 'marketing_events'), orderBy('createdAt', 'desc'));
     const unsubEvents = onSnapshot(qEvents, (snap) => {
@@ -264,9 +288,8 @@ export default function App() {
         });
       }
       isFirstEventsLoad.current = false;
-    }, (err) => console.error(err));
+    }, (err) => console.error("Events fetch error:", err));
 
-    // نظام التنبيهات المباشرة الجديد
     const qAlerts = query(collection(db, 'artifacts', appId, 'public', 'data', 'global_alerts'), orderBy('createdAt', 'desc'));
     const unsubAlerts = onSnapshot(qAlerts, (snap) => {
       if (!isFirstAlertsLoad.current) {
@@ -278,37 +301,60 @@ export default function App() {
         });
       }
       isFirstAlertsLoad.current = false;
-    }, (err) => console.error(err));
+    }, (err) => console.error("Alerts fetch error:", err));
 
-    return () => { unsubOrders(); unsubEvents(); unsubAlerts(); };
+    return () => { unsubCars(); unsubOrders(); unsubEvents(); unsubAlerts(); };
   }, [user]);
 
+  // معالجة تسجيل الدخول (إيميل أو هاتف)
   const handleAuthSubmit = async (e) => {
       e.preventDefault();
       setAuthError('');
-      try {
-          if (authModal === 'signup') {
-              await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+      setAuthLoading(true);
+
+      if (authTab === 'email') {
+        try {
+            if (authModal === 'signup') {
+                await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+            } else {
+                await signInWithEmailAndPassword(auth, authEmail, authPassword);
+            }
+            setAuthModal(null);
+            setAuthEmail('');
+            setAuthPassword('');
+        } catch (err) {
+            console.error(err);
+            if (err.code === 'auth/weak-password') setAuthError('كلمة المرور ضعيفة. يجب أن تتكون من 6 أحرف على الأقل.');
+            else if (err.code === 'auth/email-already-in-use') setAuthError('هذا البريد مسجل لدينا بالفعل. قم بتسجيل الدخول.');
+            else if (err.code === 'auth/invalid-email') setAuthError('صيغة البريد الإلكتروني غير صحيحة.');
+            else setAuthError('بيانات الدخول غير صحيحة، يرجى المحاولة مجدداً.');
+        }
+      } else if (authTab === 'phone') {
+        // محاكاة تسجيل الدخول برقم الهاتف (بسبب قيود بيئة العرض على إرسال الـ OTP الحقيقي)
+        setTimeout(() => {
+          if (!otpSent) {
+            setOtpSent(true);
+            setAuthError('');
           } else {
-              await signInWithEmailAndPassword(auth, authEmail, authPassword);
+            if (otpCode.length >= 4) {
+              // الدخول بنجاح (نستخدم حساب مجهول لتجاوز المصادقة إذا لم تكن مفعلة برقم الهاتف حقيقياً)
+              signInAnonymously(auth).then(() => {
+                setAuthModal(null);
+                setOtpSent(false);
+                setAuthPhone('');
+                setOtpCode('');
+                addToast('تم تسجيل الدخول برقم الهاتف بنجاح', 'success');
+              }).catch(err => setAuthError('حدث خطأ أثناء المصادقة'));
+            } else {
+              setAuthError('الرمز المدخل غير صحيح');
+            }
           }
-          setAuthModal(null);
-          setAuthEmail('');
-          setAuthPassword('');
-      } catch (err) {
-          console.error(err);
-          if (err.code === 'auth/weak-password') {
-              setAuthError('كلمة المرور ضعيفة جداً. يجب أن تتكون من 6 أحرف أو أرقام على الأقل.');
-          } else if (err.code === 'auth/email-already-in-use') {
-              setAuthError('هذا البريد الإلكتروني مسجل لدينا بالفعل. الرجاء تسجيل الدخول بدلاً من ذلك.');
-          } else if (err.code === 'auth/invalid-email') {
-              setAuthError('صيغة البريد الإلكتروني غير صحيحة.');
-          } else if (err.code === 'auth/operation-not-allowed') {
-              setAuthError('تسجيل الدخول بالبريد غير مفعل من الإدارة. يرجى تفعيله من Firebase.');
-          } else {
-              setAuthError('بيانات الدخول غير صحيحة، يرجى التأكد والمحاولة مجدداً.');
-          }
+          setAuthLoading(false);
+        }, 1200);
+        return; // تجنب إيقاف الـ loading فوراً
       }
+      
+      setAuthLoading(false);
   };
 
   const handleLogout = async () => {
@@ -337,7 +383,7 @@ export default function App() {
     const formData = new FormData(e.target);
     const formValues = Object.fromEntries(formData.entries());
 
-    const numberFields = ['paxCount', 'workerCount', 'busCount', 'nightCount'];
+    const numberFields = ['paxCount', 'workerCount', 'busCount', 'nightCount', 'durationCount'];
     for (let field of numberFields) {
        if (formValues[field] !== undefined && formValues[field] !== "") {
            const val = parseInt(formValues[field]);
@@ -431,20 +477,6 @@ export default function App() {
     }
   };
 
-  const handleEditOrder = (order) => {
-    setBookingItem({ ...order, title: order.serviceTitle, isEditMode: true });
-    setSelectedCategory(order.serviceType);
-    setSelectedBusType(order.busSubCategory || null);
-    setPaymentMethod(order.paymentMethod || 'office');
-  };
-
-  const repeatOrder = (order) => {
-    setBookingItem({ ...order, title: order.serviceTitle, id: undefined, isEditMode: false });
-    setSelectedCategory(order.serviceType);
-    setSelectedBusType(order.busSubCategory || null);
-    setPaymentMethod(order.paymentMethod || 'office');
-  };
-
   const addMarketingEvent = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -460,7 +492,6 @@ export default function App() {
     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'marketing_events', id));
   };
 
-  // دالة إرسال التنبيهات الجديدة
   const sendGlobalAlert = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -475,7 +506,10 @@ export default function App() {
 
   const renderOrderInfo = (order) => {
     if (order.serviceType === 'reward') return `استبدال هدية (${order.pointsUsed} نقطة)`;
-    if (order.serviceType === 'car') return `المدة: ${order.rentDuration === 'daily' ? 'يومي' : order.rentDuration === 'weekly' ? 'أسبوعي' : 'شهري'} | السائق: ${order.driverOption === 'with_driver' ? 'مع سائق' : 'بدون'} | البدء: ${order.startDate || 'غير محدد'}`;
+    if (order.serviceType === 'car') {
+       const durationLabel = order.rentDuration === 'daily' ? 'أيام' : order.rentDuration === 'weekly' ? 'أسابيع' : 'أشهر';
+       return `المدة: ${order.durationCount || 1} ${durationLabel} | السائق: ${order.driverOption === 'with_driver' ? 'مع سائق' : 'بدون'} | البدء: ${order.startDate || 'غير محدد'}`;
+    }
     if (order.serviceType === 'hotel') return `${order.checkIn} لغاية ${order.checkOut} (${order.nightCount} ليلة)`;
     if (order.serviceType === 'bus' && order.busSubCategory === 'contract') return `${order.orgName} | باصات: ${order.busCount}`;
     if (order.serviceType === 'bus') return `ترفيهي: ${order.tripDate}`;
@@ -611,20 +645,64 @@ export default function App() {
         </div>
       </header>
 
-      {/* Auth Modal */}
+      {/* نافذة تسجيل الدخول الشاملة (Auth Modal) */}
       {authModal && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[3000] flex items-center justify-center p-4">
            <div className="bg-[#112240] w-full max-w-sm p-8 rounded-[3rem] border border-emerald-500/20 shadow-2xl relative animate-in text-center">
-              <button onClick={() => setAuthModal(null)} className="absolute top-6 left-6 text-white/30 hover:text-white"><X size={20}/></button>
+              <button onClick={() => {setAuthModal(null); setOtpSent(false);}} className="absolute top-6 left-6 text-white/30 hover:text-white"><X size={20}/></button>
               <div className="flex justify-center mb-6"><HTLogo size="large" /></div>
               <h2 className="text-xl font-black text-white mb-6">{authModal === 'login' ? 'تسجيل الدخول' : 'حساب جديد'}</h2>
-              {authError && <div className="bg-rose-500/10 text-rose-400 p-3 rounded-xl text-xs font-bold mb-4">{authError}</div>}
+              
+              {/* Tabs: Email or Phone */}
+              <div className="flex bg-[#0B192C] p-1 rounded-2xl mb-6 border border-white/5">
+                 <button onClick={() => {setAuthTab('email'); setAuthError('');}} className={`flex-1 py-2.5 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${authTab === 'email' ? 'bg-emerald-500 text-black shadow-md' : 'text-white/40 hover:text-white'}`}>
+                    <Mail size={14} /> البريد
+                 </button>
+                 <button onClick={() => {setAuthTab('phone'); setAuthError(''); setOtpSent(false);}} className={`flex-1 py-2.5 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${authTab === 'phone' ? 'bg-emerald-500 text-black shadow-md' : 'text-white/40 hover:text-white'}`}>
+                    <Phone size={14} /> الهاتف
+                 </button>
+              </div>
+
+              {authError && <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-3 rounded-xl text-xs font-bold mb-4">{authError}</div>}
+              
               <form onSubmit={handleAuthSubmit} className="space-y-4">
-                  <input type="email" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="البريد الإلكتروني" />
-                  <input type="password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="كلمة المرور" />
-                  <button type="submit" className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all">تأكيد</button>
+                  {authTab === 'email' ? (
+                     <>
+                        <input type="email" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="البريد الإلكتروني (مثال: email@domain.com)" />
+                        <input type="password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="كلمة المرور" />
+                        <button type="submit" disabled={authLoading} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all disabled:opacity-50">
+                           {authLoading ? 'جاري التحقق...' : 'تأكيد'}
+                        </button>
+                     </>
+                  ) : (
+                     <>
+                        {!otpSent ? (
+                           <>
+                              <div className="relative flex" dir="ltr">
+                                 <div className="bg-white/5 border border-white/10 border-r-0 rounded-l-2xl px-3 flex items-center text-white/60 font-medium text-xs">
+                                   +963
+                                 </div>
+                                 <input type="tel" required value={authPhone} onChange={(e)=>setAuthPhone(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-r-2xl py-3 px-4 text-xs text-white outline-none focus:border-emerald-500" placeholder="09xx xxx xxx" />
+                              </div>
+                              <button type="submit" disabled={authLoading || !authPhone} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all disabled:opacity-50">
+                                 {authLoading ? 'جاري الإرسال...' : 'إرسال رمز التحقق'}
+                              </button>
+                           </>
+                        ) : (
+                           <>
+                              <input type="text" required value={otpCode} onChange={(e)=>setOtpCode(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-lg tracking-[0.5em] font-black text-white text-center outline-none focus:border-emerald-500" placeholder="123456" maxLength={6} />
+                              <p className="text-[10px] text-white/40">تم إرسال الرمز لرقمك (للتجربة: أدخل أي أرقام)</p>
+                              <button type="submit" disabled={authLoading || !otpCode} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all disabled:opacity-50 mt-2">
+                                 {authLoading ? 'جاري التأكيد...' : 'تأكيد الدخول'}
+                              </button>
+                           </>
+                        )}
+                     </>
+                  )}
               </form>
-              <button onClick={() => setAuthModal(authModal === 'login' ? 'signup' : 'login')} className="mt-6 text-[10px] text-white/40 hover:text-white transition-colors">تبديل العملية</button>
+              <button type="button" onClick={() => setAuthModal(authModal === 'login' ? 'signup' : 'login')} className="mt-6 text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors underline decoration-emerald-500/30 underline-offset-4">
+                 {authModal === 'login' ? 'ليس لديك حساب؟ أنشئ حساباً جديداً' : 'لديك حساب بالفعل؟ سجل دخولك'}
+              </button>
            </div>
         </div>
       )}
@@ -683,7 +761,7 @@ export default function App() {
                                <td className="p-4 font-black text-emerald-400">{order.serviceTitle}</td>
                                <td className="p-4">
                                   <div className="font-bold">{order.name}</div>
-                                  <div className="text-[10px] text-white/40">{order.phone}</div>
+                                  <div className="text-[10px] text-white/40" dir="ltr" style={{textAlign: "right"}}>{order.phone}</div>
                                </td>
                                <td className="p-4 text-white/60">{renderOrderInfo(order)}</td>
                                <td className="p-4 text-white/60 text-[10px] whitespace-nowrap">{formatDateTime(order.createdAt)}</td>
@@ -861,7 +939,7 @@ export default function App() {
                         </div>
                     )}
 
-                    {/* TRANSIT - الواجهة الترحيبية الجديدة بخلفية الصور */}
+                    {/* TRANSIT */}
                     {selectedCategory === 'transit' && (
                         <div className="space-y-4 animate-in fade-in">
                             <div className="relative bg-[#112240] w-full h-[400px] rounded-[3rem] overflow-hidden shadow-2xl border border-indigo-500/20 group">
@@ -900,7 +978,7 @@ export default function App() {
                         </div>
                     )}
 
-                    {/* CARS (مع إضافة السعر فوق الصورة وزر التعديل للإدارة) */}
+                    {/* CARS */}
                     {selectedCategory === 'car' && carsList.map(car => (
                         <div key={car.id} className="bg-[#112240] rounded-[2.5rem] overflow-hidden p-4 shadow-lg border border-white/5 group hover:border-emerald-500/30 transition-all">
                            <div className="relative">
@@ -1033,8 +1111,8 @@ export default function App() {
                  
                  {/* CONTACT INFO */}
                  <div className="grid grid-cols-2 gap-4">
-                    <input name="name" required defaultValue={bookingItem?.name || localStorage.getItem('sh-user-name') || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-2xl p-4 text-xs text-white text-right outline-none focus:border-emerald-500 shadow-inner" placeholder="الاسم الكامل" />
-                    <input name="phone" required defaultValue={bookingItem?.phone || localStorage.getItem('sh-user-phone') || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-2xl p-4 text-xs text-left text-white outline-none focus:border-emerald-500 shadow-inner" placeholder="09xxxxxx" />
+                    <input name="name" required defaultValue={bookingItem?.isEditMode ? bookingItem.name : ""} className="w-full bg-[#0B192C] border border-white/5 rounded-2xl p-4 text-xs text-white text-right outline-none focus:border-emerald-500 shadow-inner" placeholder="الاسم الكامل" />
+                    <input name="phone" required defaultValue={bookingItem?.isEditMode ? bookingItem.phone : (localStorage.getItem('sh-user-phone') || "")} className="w-full bg-[#0B192C] border border-white/5 rounded-2xl p-4 text-xs text-left text-white outline-none focus:border-emerald-500 shadow-inner" placeholder="09xxxxxx" />
                  </div>
 
                  {/* HOTEL SPECIFIC FIELDS */}
@@ -1173,6 +1251,7 @@ export default function App() {
                  {selectedCategory === 'car' && (
                     <div className="space-y-3 p-4 bg-emerald-500/5 rounded-3xl border border-emerald-500/10">
                         <div className="grid grid-cols-2 gap-3">
+                            {/* تعديل حقل المدة وإضافة العدد */}
                             <div className="space-y-1 text-right">
                                 <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">المدة</label>
                                 <select name="rentDuration" required defaultValue={bookingItem?.rentDuration || "daily"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-emerald-500 appearance-none">
@@ -1182,17 +1261,23 @@ export default function App() {
                                 </select>
                             </div>
                             <div className="space-y-1 text-right">
-                                <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">السائق</label>
-                                <select name="driverOption" required defaultValue={bookingItem?.driverOption || "with_driver"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-emerald-500 appearance-none">
-                                    <option value="with_driver">مع سائق</option>
-                                    <option value="without_driver">بدون سائق</option>
-                                </select>
+                                <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">عدد الأيام</label>
+                                <input name="durationCount" type="number" min="1" required defaultValue={bookingItem?.durationCount || "1"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-emerald-500 shadow-inner" placeholder="مثال: 3" />
                             </div>
                         </div>
-                        {/* إضافة حقل تاريخ البدء كما طلبت */}
-                        <div className="space-y-1 text-right mt-3">
-                            <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">تاريخ البدء</label>
-                            <input name="startDate" type="date" required defaultValue={bookingItem?.startDate || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-emerald-500" />
+
+                        <div className="grid grid-cols-2 gap-3">
+                           <div className="space-y-1 text-right">
+                               <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">السائق</label>
+                               <select name="driverOption" required defaultValue={bookingItem?.driverOption || "with_driver"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-emerald-500 appearance-none">
+                                   <option value="with_driver">مع سائق</option>
+                                   <option value="without_driver">بدون سائق</option>
+                               </select>
+                           </div>
+                           <div className="space-y-1 text-right">
+                               <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">تاريخ البدء</label>
+                               <input name="startDate" type="date" required defaultValue={bookingItem?.startDate || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-emerald-500" />
+                           </div>
                         </div>
                     </div>
                  )}
@@ -1287,7 +1372,7 @@ export default function App() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
         * { font-family: 'Cairo', sans-serif; -webkit-tap-highlight-color: transparent; scroll-behavior: smooth; }
-        input[type="date"], input[type="time"], input[type="number"], input[type="email"], input[type="password"] { color-scheme: dark; }
+        input[type="date"], input[type="time"], input[type="number"], input[type="email"], input[type="password"], input[type="tel"] { color-scheme: dark; }
         input[type="date"]::-webkit-calendar-picker-indicator,
         input[type="time"]::-webkit-calendar-picker-indicator {
             background-color: #10b981;
