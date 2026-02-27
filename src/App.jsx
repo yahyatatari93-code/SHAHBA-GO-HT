@@ -129,12 +129,17 @@ export default function App() {
   
   const [user, setUser] = useState(null);
   
-  // نظام الصلاحيات يدعم الإيميل ورقم الهاتف
+  // نظام الصلاحيات المطور للحفاظ على تسجيل الدخول
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   
+  // التحقق مما إذا كان المستخدم زائر أم مسجل دخول فعلي (بالإيميل أو بالهاتف)
+  const isSimulatedPhone = !!localStorage.getItem('auth_simulated_phone');
+  const isGuest = user?.isAnonymous && !isSimulatedPhone;
+
   const isUserAdmin = user && (
     (user.email && ADMIN_ACCOUNTS.includes(user.email.toLowerCase())) ||
-    (user.phoneNumber && ADMIN_ACCOUNTS.includes(user.phoneNumber))
+    (user.phoneNumber && ADMIN_ACCOUNTS.includes(user.phoneNumber)) ||
+    (isSimulatedPhone && ADMIN_ACCOUNTS.includes(localStorage.getItem('auth_simulated_phone')))
   );
 
   const [adminTab, setAdminTab] = useState('orders'); 
@@ -193,7 +198,7 @@ export default function App() {
     isAdminRef.current = isUserAdmin;
   }, [isUserAdmin]);
 
-  // تهيئة التطبيق والمصادقة المبدئية
+  // تهيئة التطبيق والمصادقة المبدئية مع الحفاظ على تسجيل الدخول
   useEffect(() => {
     let viewportMeta = document.querySelector('meta[name="viewport"]');
     if (!viewportMeta) {
@@ -213,27 +218,29 @@ export default function App() {
 
     const timer = setTimeout(() => setShowSplash(false), 2500); 
     
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (err) { console.error("Auth init error:", err); }
-    };
-    initAuth();
-    
-    const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+    // مراقبة حالة تسجيل الدخول للفايربيز
+    const unsubAuth = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        // إذا كان هناك مستخدم محفوظ مسبقاً، نستخدمه ولن ننشئ زائر جديد!
+        setUser(currentUser);
+      } else {
+        // لا يوجد مستخدم؟ فقط هنا نقوم بإنشاء حساب زائر مبدئي
+        try {
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token);
+          } else {
+            await signInAnonymously(auth);
+          }
+        } catch (err) { console.error("Auth init error:", err); }
+      }
     });
 
     return () => { clearTimeout(timer); unsubAuth(); };
   }, []);
 
-  // جلب البيانات مع حماية (Auth Before Queries - Rule 3)
+  // جلب البيانات مع حماية
   useEffect(() => {
-    if (!user) return; // الحماية الأساسية
+    if (!user) return; 
 
     // استدعاء معلومات أسعار السيارات
     const unsubCars = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'cars'), (snap) => {
@@ -322,6 +329,7 @@ export default function App() {
             setAuthModal(null);
             setAuthEmail('');
             setAuthPassword('');
+            addToast('تم تسجيل الدخول بنجاح', 'success');
         } catch (err) {
             console.error(err);
             if (err.code === 'auth/weak-password') setAuthError('كلمة المرور ضعيفة. يجب أن تتكون من 6 أحرف على الأقل.');
@@ -330,15 +338,15 @@ export default function App() {
             else setAuthError('بيانات الدخول غير صحيحة، يرجى المحاولة مجدداً.');
         }
       } else if (authTab === 'phone') {
-        // محاكاة تسجيل الدخول برقم الهاتف (بسبب قيود بيئة العرض على إرسال الـ OTP الحقيقي)
+        // محاكاة تسجيل الدخول برقم الهاتف 
         setTimeout(() => {
           if (!otpSent) {
             setOtpSent(true);
             setAuthError('');
           } else {
             if (otpCode.length >= 4) {
-              // الدخول بنجاح (نستخدم حساب مجهول لتجاوز المصادقة إذا لم تكن مفعلة برقم الهاتف حقيقياً)
               signInAnonymously(auth).then(() => {
+                localStorage.setItem('auth_simulated_phone', authPhone); // حفظ رقم الهاتف لإبقائه متصلاً
                 setAuthModal(null);
                 setOtpSent(false);
                 setAuthPhone('');
@@ -351,7 +359,7 @@ export default function App() {
           }
           setAuthLoading(false);
         }, 1200);
-        return; // تجنب إيقاف الـ loading فوراً
+        return; 
       }
       
       setAuthLoading(false);
@@ -359,8 +367,10 @@ export default function App() {
 
   const handleLogout = async () => {
       await signOut(auth);
+      localStorage.removeItem('auth_simulated_phone'); // مسح تسجيل الدخول الوهمي عند الخروج
       setShowAdminPanel(false);
       setActiveView('main');
+      addToast('تم تسجيل الخروج', 'info');
   };
 
   const handleSaveCarPrice = async (e) => {
@@ -416,7 +426,7 @@ export default function App() {
       status: 'pending',
       rejectionReason: '', 
       userId: user.uid,
-      isGuest: user.isAnonymous
+      isGuest: isGuest // استخدام المتغير المطور
     };
 
     if (bookingItem?.isEditMode && bookingItem?.id) {
@@ -424,7 +434,7 @@ export default function App() {
        await updateDoc(orderRef, { ...orderData, updatedAt: serverTimestamp() });
     } else {
        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'orders'), { ...orderData, createdAt: serverTimestamp() });
-       if (!user.isAnonymous) {
+       if (!isGuest) {
            setUserPoints(prev => prev + 25);
        }
     }
@@ -437,7 +447,7 @@ export default function App() {
   };
 
   const handleRedeemReward = async (reward) => {
-      if (!user || user.isAnonymous) {
+      if (!user || isGuest) {
           setAuthModal('signup');
           return;
       }
@@ -621,7 +631,7 @@ export default function App() {
             {(!isUserAdmin || !showAdminPanel) && (
                 <button onClick={() => {setActiveView('wallet'); setSelectedCategory(null);}} className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 rounded-xl text-emerald-400 hover:bg-emerald-500/30 transition-colors">
                     <Gift size={14}/>
-                    <span className="text-[10px] font-black">{user?.isAnonymous ? '0' : userPoints}</span>
+                    <span className="text-[10px] font-black">{isGuest ? '0' : userPoints}</span>
                 </button>
             )}
             
@@ -633,7 +643,7 @@ export default function App() {
                 </button>
             )}
 
-            {user?.isAnonymous ? (
+            {isGuest ? (
                 <button onClick={() => setAuthModal('login')} className="px-3 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border border-white/10 bg-white/5 text-slate-300">
                     <LogIn size={14} /> دخول
                 </button>
@@ -857,7 +867,7 @@ export default function App() {
                    </div>
                 </div>
 
-                <div onClick={() => !user?.isAnonymous ? setActiveView('wallet') : setAuthModal('signup')} className="bg-gradient-to-r from-emerald-900/40 to-[#112240] border border-emerald-500/20 p-5 rounded-[2rem] flex items-center gap-4 cursor-pointer shadow-lg hover:border-emerald-500/40 transition-colors">
+                <div onClick={() => !isGuest ? setActiveView('wallet') : setAuthModal('signup')} className="bg-gradient-to-r from-emerald-900/40 to-[#112240] border border-emerald-500/20 p-5 rounded-[2rem] flex items-center gap-4 cursor-pointer shadow-lg hover:border-emerald-500/40 transition-colors">
                    <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 shadow-inner"><Star size={24}/></div>
                    <div className="flex-1">
                       <h4 className="text-xs font-black text-emerald-400">انضم لنادي النخبة HT</h4>
@@ -1251,7 +1261,6 @@ export default function App() {
                  {selectedCategory === 'car' && (
                     <div className="space-y-3 p-4 bg-emerald-500/5 rounded-3xl border border-emerald-500/10">
                         <div className="grid grid-cols-2 gap-3">
-                            {/* تعديل حقل المدة وإضافة العدد */}
                             <div className="space-y-1 text-right">
                                 <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">المدة</label>
                                 <select name="rentDuration" required defaultValue={bookingItem?.rentDuration || "daily"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-emerald-500 appearance-none">
@@ -1343,10 +1352,10 @@ export default function App() {
               <p className="text-sm font-bold text-gray-600 mb-2 leading-relaxed">
                 شكراً لثقتك بـ HT. سيقوم فريقنا بالرد عليك فوراً.
               </p>
-              {(!bookingItem?.isEditMode && !user?.isAnonymous) && (
+              {(!bookingItem?.isEditMode && !isGuest) && (
                   <p className="text-xs text-emerald-600 font-bold mb-8 bg-emerald-50 p-2 rounded-lg">🎁 تم إضافة 25 نقطة لمحفظتك!</p>
               )}
-              {(!bookingItem?.isEditMode && user?.isAnonymous) && (
+              {(!bookingItem?.isEditMode && isGuest) && (
                   <p className="text-[10px] text-rose-600 font-bold mb-8 bg-rose-50 p-2 rounded-lg cursor-pointer hover:bg-rose-100" onClick={() => {setShowSuccessCard(false); setAuthModal('signup');}}>
                       💡 فاتتك 25 نقطة! أنشئ حسابك الآن لتبدأ بجمع النقاط.
                   </p>
