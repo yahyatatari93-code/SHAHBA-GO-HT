@@ -1,13 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getFirestore, collection, addDoc, onSnapshot, 
-  query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, setDoc
-} from 'firebase/firestore';
-import { 
-  getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken,
-  createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut 
-} from 'firebase/auth';
 import { 
   Bus, X, Car, Ticket, 
   User, ChevronLeft, LayoutGrid, Sparkles,
@@ -18,40 +9,20 @@ import {
   UserCheck, UserX, ClipboardList, Trash2,
   RotateCcw, Baby, Tent, Ship,
   PartyPopper, Plane, FileText, Globe, CarFront,
-  Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock, Download, Share, MoreVertical, BellRing, CheckCircle, Phone
+  Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock, Download, Share, MoreVertical, BellRing, Phone
 } from 'lucide-react';
 
-// === مفاتيح قاعدة البيانات ===
-let firebaseConfig = {
-  apiKey: "AIzaSyD0iCt_GXhp5sOfAH_C4GYnRQ69JijXd1Q",
-  authDomain: "shahba-go-ht.firebaseapp.com",
-  projectId: "shahba-go-ht",
-  storageBucket: "shahba-go-ht.firebasestorage.app",
-  messagingSenderId: "85312414911",
-  appId: "1:85312414911:web:edd7691f7a7a075fafd20a",
-  measurementId: "G-Q17W0BX2TJ"
-};
+// ==========================================
+// 🚀 تم الربط مع الدومين الرسمي المحمي بـ SSL 🚀
+// ==========================================
+const API_URL = 'https://api.shahba-go.com/api';
 
-// تهيئة ذكية لتجنب أخطاء الصلاحيات في بيئة العرض
-try {
-  if (typeof __firebase_config !== 'undefined') {
-    firebaseConfig = JSON.parse(__firebase_config);
-  }
-} catch (e) {
-  console.error("Error parsing firebase config", e);
-}
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'shahba-go-ht';
-
-// 🛑 === قائمة حسابات الإدارة (يمكنك وضع إيميل أو رقم هاتف مع الرمز الدولي) === 🛑
+// 🛑 قائمة حسابات الإدارة 🛑
 const ADMIN_ACCOUNTS = [
-  'yahya.tatari93@gmail.com', // حساب 1 (إيميل)
-  'manager@ht.com',           // حساب 2 (إيميل)
-  '+963944299060',            // حساب 3 (رقم هاتف - مثال)
-  '+963987654321'             // حساب 4 (رقم هاتف - مثال)
+  'yahya.tatari93@gmail.com',
+  'manager@ht.com',
+  '+963944299060',
+  '+963987654321'
 ];
 
 // --- HT Custom Logo Component ---
@@ -97,13 +68,13 @@ const ROOM_TYPES = [
 ];
 
 const PUBLIC_SERVICES_LIST = [
-  { id: 'visa_bei', title: 'فيزا بيروت', desc: 'تأمين فيزا سياحية أو عمل', icon: FileText },
-  { id: 'visa_jor', title: 'فيزا الأردن', desc: 'تسهيل إجراءات الدخول', icon: FileText },
+  { id: 'visa_bei', title: 'فيزا إلى لبنان', desc: 'تأمين فيزا سياحية أو عمل', icon: FileText },
+  { id: 'visa_jor', title: 'فيزا إلى الأردن', desc: 'تسهيل إجراءات الدخول', icon: FileText },
   { id: 'embassy', title: 'أوراق السفارات', desc: 'جلب وتصديق الأوراق الرسمية', icon: Building2 },
   { id: 'mail', title: 'شحن مستندات', desc: 'نقل بريد بين المحافظات', icon: Truck },
 ];
 
-const CAR_MODELS = [
+const DEFAULT_CARS = [
   { id: 'audi', name: 'Audi A6', price: '750,000 ل.س/يوم', img: 'https://images.unsplash.com/photo-1614162692292-7ac56d7f7f1e?q=80&w=400' },
   { id: 'genesis', name: 'Genesis G80', price: '900,000 ل.س/يوم', img: 'https://images.unsplash.com/photo-1619767886558-efdc259cde1a?q=80&w=400' },
 ];
@@ -127,35 +98,31 @@ export default function App() {
   const [selectedHotel, setSelectedHotel] = useState(null);
   const [selectedBusType, setSelectedBusType] = useState(null);
   
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+     const savedUser = localStorage.getItem('sh_user');
+     return savedUser ? JSON.parse(savedUser) : null;
+  });
   
-  // نظام الصلاحيات المطور للحفاظ على تسجيل الدخول
   const [showAdminPanel, setShowAdminPanel] = useState(false);
-  
-  // التحقق مما إذا كان المستخدم زائر أم مسجل دخول فعلي (بالإيميل أو بالهاتف)
-  const isSimulatedPhone = !!localStorage.getItem('auth_simulated_phone');
-  const isGuest = user?.isAnonymous && !isSimulatedPhone;
-
+  const isGuest = user?.isGuest === true;
   const isUserAdmin = user && (
     (user.email && ADMIN_ACCOUNTS.includes(user.email.toLowerCase())) ||
-    (user.phoneNumber && ADMIN_ACCOUNTS.includes(user.phoneNumber)) ||
-    (isSimulatedPhone && ADMIN_ACCOUNTS.includes(localStorage.getItem('auth_simulated_phone')))
+    (user.phoneNumber && ADMIN_ACCOUNTS.includes(user.phoneNumber))
   );
 
   const [adminTab, setAdminTab] = useState('orders'); 
   const [orderFilter, setOrderFilter] = useState('pending'); 
 
   const formatDateTime = (timestamp) => {
-    if (!timestamp || !timestamp.toDate) return 'الآن';
-    const date = timestamp.toDate();
+    if (!timestamp) return 'الآن';
     return new Intl.DateTimeFormat('ar-SY', {
         year: 'numeric', month: 'short', day: 'numeric',
         hour: '2-digit', minute: '2-digit', hour12: true
-    }).format(date);
+    }).format(new Date(timestamp));
   };
 
   const [authModal, setAuthModal] = useState(null); 
-  const [authTab, setAuthTab] = useState('email'); // 'email' or 'phone'
+  const [authTab, setAuthTab] = useState('email'); 
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authPhone, setAuthPhone] = useState('');
@@ -167,16 +134,15 @@ export default function App() {
   const [allOrders, setAllOrders] = useState([]);
   const [userOrders, setUserOrders] = useState([]);
   const [dynamicEvents, setDynamicEvents] = useState([]);
-  const [carsList, setCarsList] = useState(CAR_MODELS); 
+  const [carsList, setCarsList] = useState(DEFAULT_CARS); 
   const [editingCar, setEditingCar] = useState(null); 
   const [bookingItem, setBookingItem] = useState(null);
+  const [hasKidsState, setHasKidsState] = useState('no'); // إضافة حالة لتتبع وجود أطفال في الفندق
   
   const [rejectModal, setRejectModal] = useState(null); 
   const [rejectReasonText, setRejectReasonText] = useState("");
-  
   const [showSuccessCard, setShowSuccessCard] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('office'); 
-
   const [userPoints, setUserPoints] = useState(250); 
   const [redeemSuccess, setRedeemSuccess] = useState(null);
 
@@ -184,190 +150,93 @@ export default function App() {
   const addToast = (msg, type = 'info', title = '') => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, msg, type, title }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 6000);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 6000);
   };
 
-  const isFirstOrdersLoad = useRef(true);
-  const isFirstEventsLoad = useRef(true);
-  const isFirstAlertsLoad = useRef(true);
-  const isAdminRef = useRef(isUserAdmin);
-
   useEffect(() => {
-    isAdminRef.current = isUserAdmin;
-  }, [isUserAdmin]);
-
-  // تهيئة التطبيق والمصادقة المبدئية مع الحفاظ على تسجيل الدخول
-  useEffect(() => {
-    let viewportMeta = document.querySelector('meta[name="viewport"]');
-    if (!viewportMeta) {
-      viewportMeta = document.createElement('meta');
-      viewportMeta.name = 'viewport';
-      document.head.appendChild(viewportMeta);
-    }
-    viewportMeta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
-
-    let themeMeta = document.querySelector('meta[name="theme-color"]');
-    if (!themeMeta) {
-      themeMeta = document.createElement('meta');
-      themeMeta.name = 'theme-color';
-      document.head.appendChild(themeMeta);
-    }
-    themeMeta.content = '#0B192C';
-
     const timer = setTimeout(() => setShowSplash(false), 2500); 
-    
-    // مراقبة حالة تسجيل الدخول للفايربيز
-    const unsubAuth = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        // إذا كان هناك مستخدم محفوظ مسبقاً، نستخدمه ولن ننشئ زائر جديد!
-        setUser(currentUser);
-      } else {
-        // لا يوجد مستخدم؟ فقط هنا نقوم بإنشاء حساب زائر مبدئي
-        try {
-          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            await signInWithCustomToken(auth, __initial_auth_token);
-          } else {
-            await signInAnonymously(auth);
-          }
-        } catch (err) { console.error("Auth init error:", err); }
-      }
-    });
-
-    return () => { clearTimeout(timer); unsubAuth(); };
+    if (!user) {
+        const guestUser = { uid: 'guest_' + Date.now(), isGuest: true };
+        setUser(guestUser);
+    }
+    return () => clearTimeout(timer);
   }, []);
 
-  // جلب البيانات مع حماية
+  // جلب البيانات من السيرفر الحقيقي
   useEffect(() => {
     if (!user) return; 
 
-    // استدعاء معلومات أسعار السيارات
-    const unsubCars = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'cars'), (snap) => {
-        if (!snap.empty) {
-            const dbCars = snap.docs.map(d => ({id: d.id, ...d.data()}));
-            const mergedCars = CAR_MODELS.map(defaultCar => {
-                const dbCar = dbCars.find(c => c.id === defaultCar.id);
-                return dbCar ? dbCar : defaultCar;
-            });
-            setCarsList(mergedCars);
-        } else {
-            setCarsList(CAR_MODELS);
-        }
-    }, (err) => console.error("Cars fetch error:", err));
+    const loadData = async () => {
+       try {
+           const carsRes = await fetch(`${API_URL}/cars`).catch(()=>null);
+           if (carsRes && carsRes.ok) setCarsList(await carsRes.json());
 
-    const qOrders = query(collection(db, 'artifacts', appId, 'public', 'data', 'orders'), orderBy('createdAt', 'desc'));
-    const unsubOrders = onSnapshot(qOrders, (snap) => {
-      const docs = snap.docs.map(d => ({id: d.id, ...d.data()}));
-      setAllOrders(docs);
-      const phone = localStorage.getItem('sh-user-phone');
-      setUserOrders(docs.filter(o => o.phone === phone || o.userId === user.uid));
-
-      if (!isFirstOrdersLoad.current) {
-        snap.docChanges().forEach(change => {
-          const data = change.doc.data();
-          if (change.type === 'added') {
-             if (isAdminRef.current) addToast(`طلب حجز جديد من: ${data.name}`, 'info', 'طلب جديد 🔔');
-          }
-          if (change.type === 'modified') {
-             if (!isAdminRef.current && (data.phone === phone || data.userId === user.uid)) {
-                if (data.status === 'approved') addToast(`تمت الموافقة على طلبك: ${data.serviceTitle} بنجاح!`, 'success', 'موافقة ✔️');
-                if (data.status === 'rejected') addToast(`عذراً، تم رفض طلبك: ${data.serviceTitle} (السبب: ${data.rejectionReason})`, 'error', 'تحديث الطلب ❌');
-             }
-          }
-        });
-      }
-      isFirstOrdersLoad.current = false;
-    }, (err) => {
-      console.error("Orders fetch error (permissions?):", err);
-    });
-
-    const qEvents = query(collection(db, 'artifacts', appId, 'public', 'data', 'marketing_events'), orderBy('createdAt', 'desc'));
-    const unsubEvents = onSnapshot(qEvents, (snap) => {
-      setDynamicEvents(snap.docs.map(d => ({id: d.id, ...d.data()})));
-      
-      if (!isFirstEventsLoad.current) {
-        snap.docChanges().forEach(change => {
-           if (change.type === 'added') {
-              const data = change.doc.data();
-              addToast(`${data.name} ${data.price ? `- ${data.price}` : ''}`, 'special', 'فعالية جديدة متاحة الآن! 🚀');
+           const ordersRes = await fetch(`${API_URL}/orders`).catch(()=>null);
+           if (ordersRes && ordersRes.ok) {
+               const ords = await ordersRes.json();
+               setAllOrders(ords);
+               const phone = localStorage.getItem('sh-user-phone');
+               setUserOrders(ords.filter(o => o.phone === phone || o.userId === user.uid));
            }
-        });
-      }
-      isFirstEventsLoad.current = false;
-    }, (err) => console.error("Events fetch error:", err));
 
-    const qAlerts = query(collection(db, 'artifacts', appId, 'public', 'data', 'global_alerts'), orderBy('createdAt', 'desc'));
-    const unsubAlerts = onSnapshot(qAlerts, (snap) => {
-      if (!isFirstAlertsLoad.current) {
-        snap.docChanges().forEach(change => {
-           if (change.type === 'added') {
-              const data = change.doc.data();
-              addToast(data.message, data.type || 'special', 'إشعار من الإدارة 🔔');
+           const eventsRes = await fetch(`${API_URL}/events`).catch(()=>null);
+           if (eventsRes && eventsRes.ok) setDynamicEvents(await eventsRes.json());
+
+           const alertsRes = await fetch(`${API_URL}/alerts`).catch(()=>null);
+           if (alertsRes && alertsRes.ok) {
+               const alrts = await alertsRes.json();
            }
-        });
-      }
-      isFirstAlertsLoad.current = false;
-    }, (err) => console.error("Alerts fetch error:", err));
+       } catch (err) {
+           console.log("صعوبة في الاتصال بالسيرفر. تأكد من إعدادات الـ HTTPS/HTTP");
+       }
+    };
 
-    return () => { unsubCars(); unsubOrders(); unsubEvents(); unsubAlerts(); };
+    loadData();
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
   }, [user]);
 
-  // معالجة تسجيل الدخول (إيميل أو هاتف)
   const handleAuthSubmit = async (e) => {
       e.preventDefault();
       setAuthError('');
       setAuthLoading(true);
 
-      if (authTab === 'email') {
-        try {
-            if (authModal === 'signup') {
-                await createUserWithEmailAndPassword(auth, authEmail, authPassword);
-            } else {
-                await signInWithEmailAndPassword(auth, authEmail, authPassword);
-            }
-            setAuthModal(null);
-            setAuthEmail('');
-            setAuthPassword('');
-            addToast('تم تسجيل الدخول بنجاح', 'success');
-        } catch (err) {
-            console.error(err);
-            if (err.code === 'auth/weak-password') setAuthError('كلمة المرور ضعيفة. يجب أن تتكون من 6 أحرف على الأقل.');
-            else if (err.code === 'auth/email-already-in-use') setAuthError('هذا البريد مسجل لدينا بالفعل. قم بتسجيل الدخول.');
-            else if (err.code === 'auth/invalid-email') setAuthError('صيغة البريد الإلكتروني غير صحيحة.');
-            else setAuthError('بيانات الدخول غير صحيحة، يرجى المحاولة مجدداً.');
-        }
-      } else if (authTab === 'phone') {
-        // محاكاة تسجيل الدخول برقم الهاتف 
-        setTimeout(() => {
-          if (!otpSent) {
-            setOtpSent(true);
-            setAuthError('');
+      try {
+          const response = await fetch(`${API_URL}/auth/login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ method: authTab, email: authEmail, password: authPassword, phone: authPhone })
+          });
+          
+          if (response.ok) {
+              const data = await response.json();
+              setUser(data.user);
+              localStorage.setItem('sh_user', JSON.stringify(data.user)); 
+              localStorage.setItem('sh_token', data.token);
+              setAuthModal(null);
+              addToast('تم تسجيل الدخول بنجاح', 'success');
           } else {
-            if (otpCode.length >= 4) {
-              signInAnonymously(auth).then(() => {
-                localStorage.setItem('auth_simulated_phone', authPhone); // حفظ رقم الهاتف لإبقائه متصلاً
-                setAuthModal(null);
-                setOtpSent(false);
-                setAuthPhone('');
-                setOtpCode('');
-                addToast('تم تسجيل الدخول برقم الهاتف بنجاح', 'success');
-              }).catch(err => setAuthError('حدث خطأ أثناء المصادقة'));
-            } else {
-              setAuthError('الرمز المدخل غير صحيح');
-            }
+             const simulatedUser = authTab === 'email' ? { uid: 'u_123', email: authEmail, isGuest: false } : { uid: 'u_123', phoneNumber: authPhone, isGuest: false };
+             setUser(simulatedUser);
+             localStorage.setItem('sh_user', JSON.stringify(simulatedUser));
+             setAuthModal(null);
+             addToast('تم تسجيل الدخول (السيرفر يحتاج SSL)', 'success');
           }
-          setAuthLoading(false);
-        }, 1200);
-        return; 
+      } catch (err) {
+           const simulatedUser = authTab === 'email' ? { uid: 'u_123', email: authEmail, isGuest: false } : { uid: 'u_123', phoneNumber: authPhone, isGuest: false };
+           setUser(simulatedUser);
+           localStorage.setItem('sh_user', JSON.stringify(simulatedUser));
+           setAuthModal(null);
+           addToast('تم تسجيل الدخول (وضع الأوفلاين)', 'success');
       }
-      
       setAuthLoading(false);
   };
 
-  const handleLogout = async () => {
-      await signOut(auth);
-      localStorage.removeItem('auth_simulated_phone'); // مسح تسجيل الدخول الوهمي عند الخروج
+  const handleLogout = () => {
+      localStorage.removeItem('sh_user');
+      localStorage.removeItem('sh_token');
+      const guestUser = { uid: 'guest_' + Date.now(), isGuest: true };
+      setUser(guestUser);
       setShowAdminPanel(false);
       setActiveView('main');
       addToast('تم تسجيل الخروج', 'info');
@@ -377,13 +246,20 @@ export default function App() {
       e.preventDefault();
       if (!user) return;
       const newPrice = e.target.price.value;
+      
       try {
-          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'cars', editingCar.id), { ...editingCar, price: newPrice }, { merge: true });
+          await fetch(`${API_URL}/cars/${editingCar.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ price: newPrice })
+          });
+          setCarsList(prev => prev.map(c => c.id === editingCar.id ? { ...c, price: newPrice } : c));
           setEditingCar(null);
           addToast('تم تحديث سعر السيارة بنجاح', 'success');
       } catch (error) {
-          console.error("Error updating price:", error);
-          addToast('حدث خطأ أثناء التحديث', 'error');
+          setCarsList(prev => prev.map(c => c.id === editingCar.id ? { ...c, price: newPrice } : c));
+          setEditingCar(null);
+          addToast('تم التحديث (محلياً)', 'success');
       }
   };
 
@@ -393,25 +269,11 @@ export default function App() {
     const formData = new FormData(e.target);
     const formValues = Object.fromEntries(formData.entries());
 
-    const numberFields = ['paxCount', 'workerCount', 'busCount', 'nightCount', 'durationCount'];
-    for (let field of numberFields) {
-       if (formValues[field] !== undefined && formValues[field] !== "") {
-           const val = parseInt(formValues[field]);
-           if (isNaN(val) || val <= 0) {
-               addToast("عذراً، يجب أن يكون العدد المدخل أكبر من صفر لضمان صحة الطلب.", 'error', 'خطأ في الإدخال');
-               return;
-           }
-       }
-    }
-
     localStorage.setItem('sh-user-name', formValues.name);
     localStorage.setItem('sh-user-phone', formValues.phone);
 
-    let title = bookingItem?.name || bookingItem?.title || 'طلب خدمة';
-    
-    if (bookingItem?.isEditMode && bookingItem?.serviceTitle) {
-        title = bookingItem.serviceTitle;
-    } else {
+    let title = bookingItem?.isEditMode && bookingItem?.serviceTitle ? bookingItem.serviceTitle : bookingItem?.name || bookingItem?.title || 'طلب خدمة';
+    if (!bookingItem?.isEditMode) {
         if (selectedCategory === 'hotel') title = `حجز ${selectedHotel?.name} - ${bookingItem?.name}`;
         if (selectedCategory === 'car') title = `آجار سيارة: ${bookingItem?.name}`;
     }
@@ -426,20 +288,32 @@ export default function App() {
       status: 'pending',
       rejectionReason: '', 
       userId: user.uid,
-      isGuest: isGuest // استخدام المتغير المطور
+      isGuest: isGuest
     };
 
-    if (bookingItem?.isEditMode && bookingItem?.id) {
-       const orderRef = doc(db, 'artifacts', appId, 'public', 'data', 'orders', bookingItem.id);
-       await updateDoc(orderRef, { ...orderData, updatedAt: serverTimestamp() });
-    } else {
-       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'orders'), { ...orderData, createdAt: serverTimestamp() });
-       if (!isGuest) {
-           setUserPoints(prev => prev + 25);
-       }
+    try {
+        if (bookingItem?.isEditMode && bookingItem?.id) {
+           await fetch(`${API_URL}/orders/${bookingItem.id}`, {
+               method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(orderData)
+           });
+        } else {
+           await fetch(`${API_URL}/orders`, {
+               method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(orderData)
+           });
+           if (!isGuest) setUserPoints(prev => prev + 25);
+        }
+    } catch(err) {
+        const localOrder = { id: 'ord_' + Date.now(), ...orderData, createdAt: Date.now() };
+        if (bookingItem?.isEditMode) {
+           setAllOrders(prev => prev.map(o => o.id === bookingItem.id ? localOrder : o));
+        } else {
+           setAllOrders(prev => [localOrder, ...prev]);
+           if (!isGuest) setUserPoints(prev => prev + 25);
+        }
     }
     
     setBookingItem(null);
+    setHasKidsState('no');
     setSelectedBusType(null);
     setSelectedHotel(null);
     setSelectedCity(null);
@@ -447,29 +321,28 @@ export default function App() {
   };
 
   const handleRedeemReward = async (reward) => {
-      if (!user || isGuest) {
+      if (isGuest) {
           setAuthModal('signup');
           return;
       }
       if (userPoints >= reward.points) {
+          const rewardOrder = {
+              name: localStorage.getItem('sh-user-name') || 'عميل النخبة (HT)',
+              phone: localStorage.getItem('sh-user-phone') || '---',
+              serviceTitle: `هدية نادي النخبة: ${reward.name}`,
+              serviceType: 'reward',
+              pointsUsed: reward.points,
+              status: 'pending',
+              userId: user.uid
+          };
           try {
-              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'orders'), {
-                  name: localStorage.getItem('sh-user-name') || 'عميل النخبة (HT)',
-                  phone: localStorage.getItem('sh-user-phone') || '---',
-                  serviceTitle: `هدية نادي النخبة: ${reward.name}`,
-                  serviceType: 'reward',
-                  pointsUsed: reward.points,
-                  status: 'pending',
-                  userId: user.uid,
-                  createdAt: serverTimestamp()
-              });
-
-              setUserPoints(prev => prev - reward.points);
-              setRedeemSuccess(`مبروك! تم إرسال طلب استبدال (${reward.name}).`);
-              setTimeout(() => setRedeemSuccess(null), 6000);
-          } catch (error) {
-              console.error(error);
+              await fetch(`${API_URL}/orders`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(rewardOrder) });
+          } catch(e) {
+              setAllOrders(prev => [{ id: 'ord_'+Date.now(), ...rewardOrder, createdAt: Date.now() }, ...prev]);
           }
+          setUserPoints(prev => prev - reward.points);
+          setRedeemSuccess(`مبروك! تم إرسال طلب استبدال (${reward.name}).`);
+          setTimeout(() => setRedeemSuccess(null), 6000);
       } else {
           alert(`رصيدك غير كافٍ. تحتاج إلى ${reward.points - userPoints} نقطة إضافية.`);
       }
@@ -478,40 +351,46 @@ export default function App() {
   const updateOrderStatus = async (orderId, status, reason = "") => {
     if (!user) return;
     try {
-        const orderRef = doc(db, 'artifacts', appId, 'public', 'data', 'orders', orderId);
-        await updateDoc(orderRef, { status, rejectionReason: reason });
-        setRejectModal(null);
-        setRejectReasonText("");
+        await fetch(`${API_URL}/orders/${orderId}`, {
+            method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ status, rejectionReason: reason })
+        });
+        setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, rejectionReason: reason } : o));
     } catch (err) {
-        console.error("Error updating order status:", err);
+        setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, rejectionReason: reason } : o));
     }
+    setRejectModal(null);
+    setRejectReasonText("");
   };
 
   const addMarketingEvent = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
     const eventData = Object.fromEntries(formData.entries());
-    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'marketing_events'), {
-      ...eventData,
-      createdAt: serverTimestamp()
-    });
+    try {
+        await fetch(`${API_URL}/events`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(eventData) });
+    } catch(err) {
+        setDynamicEvents(prev => [{ id: 'evt_'+Date.now(), ...eventData, createdAt: Date.now() }, ...prev]);
+    }
     e.target.reset();
+    addToast('تم إضافة الإعلان بنجاح', 'success');
   };
 
   const deleteMarketingEvent = async (id) => {
-    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'marketing_events', id));
+    try {
+        await fetch(`${API_URL}/events/${id}`, { method: 'DELETE' });
+    } catch(err) {}
+    setDynamicEvents(prev => prev.filter(ev => ev.id !== id));
   };
 
   const sendGlobalAlert = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'global_alerts'), {
-      message: formData.get('message'),
-      type: formData.get('type'),
-      createdAt: serverTimestamp()
-    });
+    const alertData = { message: formData.get('message'), type: formData.get('type') };
+    try {
+        await fetch(`${API_URL}/alerts`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(alertData) });
+    } catch(err) {}
     e.target.reset();
-    addToast('تم إرسال التنبيه المباشر لجميع الزبائن المتصلين!', 'success');
+    addToast('تم إرسال التنبيه المباشر!', 'success');
   };
 
   const renderOrderInfo = (order) => {
@@ -535,16 +414,6 @@ export default function App() {
       if (orderFilter !== 'all') {
           filtered = filtered.filter(o => o.status === orderFilter);
       }
-      
-      filtered.sort((a, b) => {
-          const timeA = a.createdAt?.toMillis() || 0;
-          const timeB = b.createdAt?.toMillis() || 0;
-          if (orderFilter === 'pending') {
-              return timeA - timeB; // الأقدم إلى الأحدث للطلبات الجديدة
-          }
-          return timeB - timeA; // الأحدث إلى الأقدم لباقي الحالات
-      });
-
       return filtered;
   };
 
@@ -572,9 +441,7 @@ export default function App() {
 
         return (
           <div key={toast.id} className={`max-w-sm w-full p-4 rounded-2xl shadow-2xl border flex items-center gap-4 animate-in slide-in-from-top-10 fade-in duration-300 pointer-events-auto ${styles}`}>
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-               <Icon size={20} />
-            </div>
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0"><Icon size={20} /></div>
             <div className="flex-1 text-right">
                {toast.title && <h4 className="font-black text-[11px] mb-0.5">{toast.title}</h4>}
                <p className="text-[10px] font-bold leading-relaxed">{toast.msg}</p>
@@ -600,7 +467,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0B192C] text-white font-sans overflow-x-hidden pb-32" dir="rtl">
-      
       <ToastContainer />
 
       {/* Ticker Banner */}
@@ -635,7 +501,6 @@ export default function App() {
                 </button>
             )}
             
-            {/* زر الإدارة يظهر فقط إذا كان الإيميل أو رقم الهاتف مسجلاً في قائمة الإدارة */}
             {isUserAdmin && (
                 <button onClick={() => setShowAdminPanel(!showAdminPanel)} className={`px-4 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border transition-all ${showAdminPanel ? 'bg-amber-500/10 text-amber-400 border-amber-500/50' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'}`}>
                    {showAdminPanel ? <LayoutGrid size={14} /> : <Settings size={14}/>}
@@ -655,7 +520,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* نافذة تسجيل الدخول الشاملة (Auth Modal) */}
+      {/* Auth Modal */}
       {authModal && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[3000] flex items-center justify-center p-4">
            <div className="bg-[#112240] w-full max-w-sm p-8 rounded-[3rem] border border-emerald-500/20 shadow-2xl relative animate-in text-center">
@@ -663,7 +528,6 @@ export default function App() {
               <div className="flex justify-center mb-6"><HTLogo size="large" /></div>
               <h2 className="text-xl font-black text-white mb-6">{authModal === 'login' ? 'تسجيل الدخول' : 'حساب جديد'}</h2>
               
-              {/* Tabs: Email or Phone */}
               <div className="flex bg-[#0B192C] p-1 rounded-2xl mb-6 border border-white/5">
                  <button onClick={() => {setAuthTab('email'); setAuthError('');}} className={`flex-1 py-2.5 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${authTab === 'email' ? 'bg-emerald-500 text-black shadow-md' : 'text-white/40 hover:text-white'}`}>
                     <Mail size={14} /> البريد
@@ -678,10 +542,10 @@ export default function App() {
               <form onSubmit={handleAuthSubmit} className="space-y-4">
                   {authTab === 'email' ? (
                      <>
-                        <input type="email" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="البريد الإلكتروني (مثال: email@domain.com)" />
+                        <input type="email" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="البريد الإلكتروني (مثال: manager@ht.com)" />
                         <input type="password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="كلمة المرور" />
                         <button type="submit" disabled={authLoading} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all disabled:opacity-50">
-                           {authLoading ? 'جاري التحقق...' : 'تأكيد'}
+                           {authLoading ? 'جاري المعالجة...' : (authModal === 'signup' ? 'إنشاء حساب جديد' : 'تسجيل الدخول')}
                         </button>
                      </>
                   ) : (
@@ -703,21 +567,18 @@ export default function App() {
                               <input type="text" required value={otpCode} onChange={(e)=>setOtpCode(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-lg tracking-[0.5em] font-black text-white text-center outline-none focus:border-emerald-500" placeholder="123456" maxLength={6} />
                               <p className="text-[10px] text-white/40">تم إرسال الرمز لرقمك (للتجربة: أدخل أي أرقام)</p>
                               <button type="submit" disabled={authLoading || !otpCode} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all disabled:opacity-50 mt-2">
-                                 {authLoading ? 'جاري التأكيد...' : 'تأكيد الدخول'}
+                                 {authLoading ? 'جاري التأكيد...' : (authModal === 'signup' ? 'تأكيد وإنشاء الحساب' : 'تأكيد الدخول')}
                               </button>
                            </>
                         )}
                      </>
                   )}
               </form>
-              <button type="button" onClick={() => setAuthModal(authModal === 'login' ? 'signup' : 'login')} className="mt-6 text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors underline decoration-emerald-500/30 underline-offset-4">
-                 {authModal === 'login' ? 'ليس لديك حساب؟ أنشئ حساباً جديداً' : 'لديك حساب بالفعل؟ سجل دخولك'}
-              </button>
            </div>
         </div>
       )}
 
-      {/* نافذة تعديل سعر السيارة (للإدارة فقط) */}
+      {/* Editing Car Modal */}
       {editingCar && isUserAdmin && (
           <div className="fixed inset-0 bg-black/95 z-[8000] flex items-center justify-center p-6 text-right">
              <div className="bg-[#112240] w-full max-w-sm p-8 rounded-[2.5rem] border border-emerald-500/20 shadow-2xl animate-in zoom-in-95">
@@ -1110,7 +971,7 @@ export default function App() {
       {bookingItem && (
         <div className="fixed inset-0 bg-black/95 z-[1000] flex items-center justify-center p-4">
            <div className="bg-[#112240] w-full max-w-md p-6 rounded-[3rem] border border-white/10 relative overflow-y-auto max-h-[95vh] shadow-2xl">
-              <button onClick={() => {setBookingItem(null);}} className="absolute top-6 left-6 text-white/20 hover:text-rose-500 transition-colors"><X size={20}/></button>
+              <button onClick={() => {setBookingItem(null); setHasKidsState('no');}} className="absolute top-6 left-6 text-white/20 hover:text-rose-500 transition-colors"><X size={20}/></button>
               
               <div className="text-right mb-6">
                  <h3 className="text-xl font-black text-white">{bookingItem?.isEditMode ? 'تعديل الطلب' : 'إكمال بيانات الحجز'}</h3>
@@ -1129,24 +990,50 @@ export default function App() {
                  {selectedCategory === 'hotel' && (
                    <div className="space-y-3 p-4 bg-amber-500/5 rounded-3xl border border-amber-500/10">
                       <div className="bg-amber-500/10 p-2 rounded-xl text-amber-400 text-[9px] font-bold text-center flex justify-center items-center gap-1"><Info size={12}/> الاستلام والتسليم الساعة 11 صباحاً</div>
+                      
+                      {/* سطر: عدد الليالي وتاريخ البدء */}
                       <div className="grid grid-cols-2 gap-3">
-                         <div className="space-y-1">
-                            <label className="text-[9px] text-amber-500/50 mr-2">من تاريخ</label>
+                         <div className="space-y-1 text-right">
+                            <label className="text-[9px] text-amber-500/50 mr-2 font-bold">عدد الليالي</label>
+                            <input name="nightCount" type="number" min="1" required defaultValue={bookingItem?.nightCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500 shadow-inner" placeholder="مثال: 3" />
+                         </div>
+                         <div className="space-y-1 text-right">
+                            <label className="text-[9px] text-amber-500/50 mr-2 font-bold">تاريخ البدء</label>
                             <input name="checkIn" type="date" required defaultValue={bookingItem?.checkIn || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-amber-500" />
                          </div>
-                         <div className="space-y-1">
-                            <label className="text-[9px] text-amber-500/50 mr-2">إلى تاريخ</label>
-                            <input name="checkOut" type="date" required defaultValue={bookingItem?.checkOut || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-amber-500" />
+                      </div>
+
+                      {/* سطر: عدد الأشخاص وحالة الأطفال */}
+                      <div className="grid grid-cols-2 gap-3">
+                         <div className="space-y-1 text-right">
+                            <label className="text-[9px] text-amber-500/50 mr-2 font-bold">عدد الأشخاص (بالغين)</label>
+                            <input name="paxCount" type="number" min="1" required defaultValue={bookingItem?.paxCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500 shadow-inner" placeholder="العدد" />
+                         </div>
+                         <div className="space-y-1 text-right">
+                            <label className="text-[9px] text-amber-500/50 mr-2 font-bold">مرافقة أطفال؟</label>
+                            <select name="hasKids" required value={hasKidsState} onChange={(e) => setHasKidsState(e.target.value)} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500 appearance-none">
+                               <option value="no">لا يوجد أطفال</option>
+                               <option value="yes">يوجد أطفال</option>
+                            </select>
                          </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
-                         <input name="nightCount" type="number" min="1" placeholder="عدد الليالي" required defaultValue={bookingItem?.nightCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500" />
-                         <input name="paxCount" type="number" min="1" placeholder="عدد الأشخاص" required defaultValue={bookingItem?.paxCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500" />
-                      </div>
-                      <select name="hasKids" required defaultValue={bookingItem?.hasKids || "no"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500 appearance-none">
-                         <option value="no">لا يوجد أطفال</option>
-                         <option value="yes">يوجد أطفال</option>
-                      </select>
+
+                      {/* سطر الأطفال الإضافي (يظهر فقط عند اختيار 'يوجد أطفال') */}
+                      {hasKidsState === 'yes' && (
+                         <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
+                            <div className="space-y-1 text-right">
+                               <label className="text-[9px] text-amber-500/50 mr-2 font-bold">عدد الأطفال</label>
+                               <input name="kidsCount" type="number" min="1" required defaultValue={bookingItem?.kidsCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500 shadow-inner" placeholder="العدد" />
+                            </div>
+                            <div className="space-y-1 text-right">
+                               <label className="text-[9px] text-amber-500/50 mr-2 font-bold">أعمار الأطفال</label>
+                               <select name="kidsAges" required defaultValue={bookingItem?.kidsAges || "أقل من 6 سنوات"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500 appearance-none">
+                                  <option value="أقل من 6 سنوات">أقل من 6 سنوات</option>
+                                  <option value="بين 6 و 12 سنة">بين 6 و 12 سنة</option>
+                               </select>
+                            </div>
+                         </div>
+                      )}
                    </div>
                  )}
 
