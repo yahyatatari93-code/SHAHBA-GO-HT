@@ -81,7 +81,7 @@ const DEFAULT_CARS = [
 
 const BUS_TYPES = [
   { id: 'contract', title: 'نظام العقود', sub: 'مدارس ومعامل', icon: School, color: 'bg-blue-500/20 text-blue-400' },
-  { id: 'leisure', title: 'رحلات ترفيهية', sub: 'مزارع ومناسبات', icon: Trees, color: 'bg-emerald-500/20 text-emerald-400' },
+  { id: 'leisure', title: 'رحلات ترفيهية', sub: 'ملاعب، مزارع، ومناسبات', icon: Trees, color: 'bg-emerald-500/20 text-emerald-400' },
 ];
 
 const HT_REWARDS = [
@@ -97,6 +97,7 @@ export default function App() {
   const [selectedCity, setSelectedCity] = useState(null);
   const [selectedHotel, setSelectedHotel] = useState(null);
   const [selectedBusType, setSelectedBusType] = useState(null);
+  const [hasKidsState, setHasKidsState] = useState('no'); 
   
   const [user, setUser] = useState(() => {
      const savedUser = localStorage.getItem('sh_user');
@@ -137,7 +138,6 @@ export default function App() {
   const [carsList, setCarsList] = useState(DEFAULT_CARS); 
   const [editingCar, setEditingCar] = useState(null); 
   const [bookingItem, setBookingItem] = useState(null);
-  const [hasKidsState, setHasKidsState] = useState('no'); // إضافة حالة لتتبع وجود أطفال في الفندق
   
   const [rejectModal, setRejectModal] = useState(null); 
   const [rejectReasonText, setRejectReasonText] = useState("");
@@ -399,7 +399,7 @@ export default function App() {
        const durationLabel = order.rentDuration === 'daily' ? 'أيام' : order.rentDuration === 'weekly' ? 'أسابيع' : 'أشهر';
        return `المدة: ${order.durationCount || 1} ${durationLabel} | السائق: ${order.driverOption === 'with_driver' ? 'مع سائق' : 'بدون'} | البدء: ${order.startDate || 'غير محدد'}`;
     }
-    if (order.serviceType === 'hotel') return `${order.checkIn} لغاية ${order.checkOut} (${order.nightCount} ليلة)`;
+    if (order.serviceType === 'hotel') return `البدء: ${order.checkIn} (${order.nightCount} ليلة)`;
     if (order.serviceType === 'bus' && order.busSubCategory === 'contract') return `${order.orgName} | باصات: ${order.busCount}`;
     if (order.serviceType === 'bus') return `ترفيهي: ${order.tripDate}`;
     if (order.serviceType === 'flights') return `من ${order.fromAirport} لـ ${order.toAirport} بتاريخ ${order.flightDate}`;
@@ -526,7 +526,10 @@ export default function App() {
            <div className="bg-[#112240] w-full max-w-sm p-8 rounded-[3rem] border border-emerald-500/20 shadow-2xl relative animate-in text-center">
               <button onClick={() => {setAuthModal(null); setOtpSent(false);}} className="absolute top-6 left-6 text-white/30 hover:text-white"><X size={20}/></button>
               <div className="flex justify-center mb-6"><HTLogo size="large" /></div>
-              <h2 className="text-xl font-black text-white mb-6">{authModal === 'login' ? 'تسجيل الدخول' : 'حساب جديد'}</h2>
+              
+              <h2 className="text-xl font-black text-white mb-6">
+                  {authModal === 'login' ? 'تسجيل الدخول' : 'إنشاء حساب جديد'}
+              </h2>
               
               <div className="flex bg-[#0B192C] p-1 rounded-2xl mb-6 border border-white/5">
                  <button onClick={() => {setAuthTab('email'); setAuthError('');}} className={`flex-1 py-2.5 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${authTab === 'email' ? 'bg-emerald-500 text-black shadow-md' : 'text-white/40 hover:text-white'}`}>
@@ -542,10 +545,10 @@ export default function App() {
               <form onSubmit={handleAuthSubmit} className="space-y-4">
                   {authTab === 'email' ? (
                      <>
-                        <input type="email" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="البريد الإلكتروني (مثال: manager@ht.com)" />
+                        <input type="email" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="البريد الإلكتروني (مثال: user@mail.com)" />
                         <input type="password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="كلمة المرور" />
                         <button type="submit" disabled={authLoading} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all disabled:opacity-50">
-                           {authLoading ? 'جاري المعالجة...' : (authModal === 'signup' ? 'إنشاء حساب جديد' : 'تسجيل الدخول')}
+                           {authLoading ? 'جاري المعالجة...' : (authModal === 'login' ? 'دخول آمن' : 'تأكيد وإنشاء الحساب')}
                         </button>
                      </>
                   ) : (
@@ -567,13 +570,27 @@ export default function App() {
                               <input type="text" required value={otpCode} onChange={(e)=>setOtpCode(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-lg tracking-[0.5em] font-black text-white text-center outline-none focus:border-emerald-500" placeholder="123456" maxLength={6} />
                               <p className="text-[10px] text-white/40">تم إرسال الرمز لرقمك (للتجربة: أدخل أي أرقام)</p>
                               <button type="submit" disabled={authLoading || !otpCode} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all disabled:opacity-50 mt-2">
-                                 {authLoading ? 'جاري التأكيد...' : (authModal === 'signup' ? 'تأكيد وإنشاء الحساب' : 'تأكيد الدخول')}
+                                 {authLoading ? 'جاري التأكيد...' : (authModal === 'login' ? 'تأكيد الدخول' : 'تأكيد وإنشاء الحساب')}
                               </button>
                            </>
                         )}
                      </>
                   )}
               </form>
+
+              {/* أزرار التبديل الجديدة بين تسجيل الدخول وإنشاء الحساب */}
+              <div className="mt-6 pt-5 border-t border-white/5">
+                  {authModal === 'login' ? (
+                      <p className="text-[11px] text-white/50 font-bold">
+                          ليس لديك حساب؟ <span onClick={() => {setAuthModal('signup'); setAuthError('');}} className="text-emerald-400 cursor-pointer hover:underline font-black px-1 transition-all">إنشاء حساب جديد</span>
+                      </p>
+                  ) : (
+                      <p className="text-[11px] text-white/50 font-bold">
+                          لديك حساب بالفعل؟ <span onClick={() => {setAuthModal('login'); setAuthError('');}} className="text-emerald-400 cursor-pointer hover:underline font-black px-1 transition-all">تسجيل الدخول</span>
+                      </p>
+                  )}
+              </div>
+
            </div>
         </div>
       )}
