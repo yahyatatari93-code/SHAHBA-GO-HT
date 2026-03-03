@@ -42,10 +42,10 @@ const HTLogo = ({ size = "normal" }) => {
 // --- Global Data Structures ---
 const CATEGORIES = [
   { id: 'car', title: 'آجار سيارات', sub: 'يومي، أسبوعي، شهري', icon: Car, color: 'from-emerald-500 to-teal-700', active: true },
-  { id: 'bus', title: 'خدمات الباصات', sub: 'عقود ورحلات ترفيهية', icon: Bus, color: 'from-blue-500 to-indigo-700', active: true },
+  { id: 'transit', title: 'خدمة النقل البري', sub: 'من البيت إلى البيت', icon: CarFront, color: 'from-indigo-500 to-purple-600', active: true },
   { id: 'hotel', title: 'الفنادق', sub: 'حجز في كافة المحافظات', icon: Hotel, color: 'from-amber-500 to-orange-700', active: true },
   { id: 'flights', title: 'حجز طيران', sub: 'رحلات داخلية ودولية', icon: Plane, color: 'from-cyan-500 to-blue-600', active: true },
-  { id: 'transit', title: 'خدمة النقل البري', sub: 'من البيت إلى البيت', icon: CarFront, color: 'from-indigo-500 to-purple-600', active: true },
+  { id: 'bus', title: 'خدمات الباصات', sub: 'عقود ورحلات ترفيهية', icon: Bus, color: 'from-blue-500 to-indigo-700', active: true },
   { id: 'services', title: 'خدمات إضافية', sub: 'فيزا، أوراق رسمية، بريد', icon: FileCheck, color: 'from-slate-500 to-gray-700', active: true }, 
   { id: 'events', title: 'الفعاليات', sub: 'رحلات وسهرات فنية', icon: Megaphone, color: 'from-rose-500 to-pink-700', active: true },
 ];
@@ -133,7 +133,7 @@ export default function App() {
   const [otpCode, setOtpCode] = useState('');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
-  const [logoutConfirm, setLogoutConfirm] = useState(false); // تأكيد تسجيل الخروج
+  const [logoutConfirm, setLogoutConfirm] = useState(false); 
 
   const [allOrders, setAllOrders] = useState([]);
   const [userOrders, setUserOrders] = useState([]);
@@ -149,7 +149,8 @@ export default function App() {
   const [userPoints, setUserPoints] = useState(250); 
   const [redeemSuccess, setRedeemSuccess] = useState(null);
 
-  const [showNotifications, setShowNotifications] = useState(false); // واجهة الإشعارات
+  const [showNotifications, setShowNotifications] = useState(false); 
+  const [selectedNotification, setSelectedNotification] = useState(null); // للرسالة المنبثقة في وسط الشاشة
 
   const [toasts, setToasts] = useState([]);
   const addToast = (msg, type = 'info', title = '') => {
@@ -190,7 +191,6 @@ export default function App() {
            const alertsRes = await fetch(`${API_URL}/alerts`).catch(()=>null);
            if (alertsRes && alertsRes.ok) {
                const alrts = await alertsRes.json();
-               // Here you can process global alerts if needed
            }
        } catch (err) {
            console.log("صعوبة في الاتصال بالسيرفر. تأكد من إعدادات الـ HTTPS/HTTP");
@@ -242,6 +242,26 @@ export default function App() {
       }
       return notifs.sort((a, b) => b.time - a.time);
   }, [allOrders, userOrders, dynamicEvents, isUserAdmin, isGuest]);
+
+  // التفاعل عند الضغط على إشعار
+  const handleNotificationClick = (n) => {
+      setShowNotifications(false);
+      setSelectedNotification(n); // إظهار النافذة المنبثقة في المنتصف
+
+      // التوجيه الذكي في الخلفية حسب نوع الإشعار
+      if (n.type === 'order') {
+          setShowAdminPanel(true);
+          setAdminTab('orders');
+          setOrderFilter('pending');
+      } else if (n.type === 'success' || n.type === 'error') {
+          setShowAdminPanel(false);
+          setActiveView('bookings');
+      } else if (n.type === 'info') {
+          setShowAdminPanel(false);
+          setActiveView('list');
+          setSelectedCategory('events');
+      }
+  };
 
   const handleAuthSubmit = async (e) => {
       e.preventDefault();
@@ -520,11 +540,16 @@ export default function App() {
       {/* Ticker Banner */}
       <div className="bg-emerald-500/10 border-b border-emerald-500/20 py-2.5 overflow-hidden whitespace-nowrap sticky top-0 z-40 backdrop-blur-md">
         <div className="flex animate-marquee space-x-12 space-x-reverse items-center">
-            <span className="text-[10px] font-black text-emerald-400 flex items-center gap-2">
-                <Sparkles size={12}/> نصلك أينما كنت، ونأخذك حيثما تريد • هدفنا راحتك
+            <span className="text-[10px] font-black text-emerald-400 flex items-center gap-4">
+                <Sparkles size={12}/> 
+                نصلك أينما كنت، ونأخذك حيثما تريد • هدفنا راحتك
+                <span className="mx-4 text-white/30 font-light">|</span>
+                <Sparkles size={12}/> 
+                كل ما تحتاجه في عالم السياحة والسفر
             </span>
             {dynamicEvents.map(ev => (
                 <span key={ev.id} className="text-[10px] font-black text-emerald-400 flex items-center gap-2">
+                    <span className="mx-4 text-white/30 font-light">|</span>
                     {ev.postType === 'offer' ? <Megaphone size={12}/> : <MapPin size={12}/>} 
                     {ev.name} {ev.price ? `• ${ev.price}` : ''}
                 </span>
@@ -567,13 +592,13 @@ export default function App() {
                                {notifications.length === 0 ? (
                                    <p className="text-[10px] text-white/40 text-center py-6 font-bold">لا يوجد تنبيهات حالياً</p>
                                ) : notifications.map(n => (
-                                   <div key={n.id} onClick={() => setShowNotifications(false)} className="text-right p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer flex gap-3">
+                                   <div key={n.id} onClick={() => handleNotificationClick(n)} className="text-right p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer flex gap-3">
                                       <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${n.type === 'error' ? 'bg-rose-500/10 text-rose-400' : n.type === 'success' ? 'bg-emerald-500/10 text-emerald-400' : n.type === 'order' ? 'bg-amber-500/10 text-amber-400' : 'bg-blue-500/10 text-blue-400'}`}>
                                           <n.icon size={14} />
                                       </div>
                                       <div className="flex-1">
                                           <h4 className="text-[11px] font-black text-white">{n.title}</h4>
-                                          <p className="text-[9px] text-white/60 mt-0.5">{n.desc}</p>
+                                          <p className="text-[9px] text-white/60 mt-0.5 truncate">{n.desc}</p>
                                           <span className="text-[8px] text-white/30 mt-1.5 block">{formatDateTime(n.time)}</span>
                                       </div>
                                    </div>
@@ -612,6 +637,33 @@ export default function App() {
             )}
         </div>
       </header>
+
+      {/* 🌟 نافذة عرض التنبيه بشكل كامل في منتصف الشاشة 🌟 */}
+      {selectedNotification && (
+          <div className="fixed inset-0 bg-black/95 z-[9500] flex items-center justify-center p-6 backdrop-blur-sm">
+             <div className="bg-[#112240] p-8 rounded-[3rem] border border-white/10 text-center shadow-2xl max-w-sm w-full animate-in zoom-in-95 relative overflow-hidden">
+                <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 border shadow-inner ${
+                    selectedNotification.type === 'error' ? 'bg-rose-500/20 text-rose-500 border-rose-500/30' :
+                    selectedNotification.type === 'success' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
+                    selectedNotification.type === 'order' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
+                    'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                }`}>
+                    <selectedNotification.icon size={36} className="animate-pulse" />
+                </div>
+                <h3 className="text-xl font-black text-white mb-3">{selectedNotification.title}</h3>
+                <p className="text-sm text-white/70 mb-8 font-bold leading-relaxed">{selectedNotification.desc}</p>
+                <p className="text-[10px] text-white/30 mb-6">{formatDateTime(selectedNotification.time)}</p>
+                <button onClick={() => setSelectedNotification(null)} className={`w-full py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all ${
+                    selectedNotification.type === 'error' ? 'bg-rose-500 text-white' :
+                    selectedNotification.type === 'success' ? 'bg-emerald-500 text-black' :
+                    selectedNotification.type === 'order' ? 'bg-amber-500 text-black' :
+                    'bg-blue-500 text-white'
+                }`}>
+                    حسناً، فهمت
+                </button>
+             </div>
+          </div>
+      )}
 
       {/* Logout Confirmation Modal */}
       {logoutConfirm && (
