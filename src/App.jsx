@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Bus, X, Car, Ticket, 
   User, ChevronLeft, LayoutGrid, Sparkles,
@@ -22,7 +22,9 @@ const ADMIN_ACCOUNTS = [
   'yahya.tatari93@gmail.com',
   'manager@ht.com',
   '+963944299060',
-  '+963987654321'
+  '+963987654321',
+  '00963955490049',
+  '+963955490049'
 ];
 
 // --- HT Custom Logo Component ---
@@ -131,6 +133,7 @@ export default function App() {
   const [otpCode, setOtpCode] = useState('');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+  const [logoutConfirm, setLogoutConfirm] = useState(false); // تأكيد تسجيل الخروج
 
   const [allOrders, setAllOrders] = useState([]);
   const [userOrders, setUserOrders] = useState([]);
@@ -145,6 +148,8 @@ export default function App() {
   const [paymentMethod, setPaymentMethod] = useState('office'); 
   const [userPoints, setUserPoints] = useState(250); 
   const [redeemSuccess, setRedeemSuccess] = useState(null);
+
+  const [showNotifications, setShowNotifications] = useState(false); // واجهة الإشعارات
 
   const [toasts, setToasts] = useState([]);
   const addToast = (msg, type = 'info', title = '') => {
@@ -185,6 +190,7 @@ export default function App() {
            const alertsRes = await fetch(`${API_URL}/alerts`).catch(()=>null);
            if (alertsRes && alertsRes.ok) {
                const alrts = await alertsRes.json();
+               // Here you can process global alerts if needed
            }
        } catch (err) {
            console.log("صعوبة في الاتصال بالسيرفر. تأكد من إعدادات الـ HTTPS/HTTP");
@@ -195,6 +201,47 @@ export default function App() {
     const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
   }, [user]);
+
+  // حساب التنبيهات ديناميكياً
+  const notifications = useMemo(() => {
+      let notifs = [];
+      if (isUserAdmin) {
+          allOrders.filter(o => o.status === 'pending').forEach(o => {
+              notifs.push({
+                  id: o.id,
+                  title: 'طلب جديد بانتظار الموافقة',
+                  desc: `طلب ${o.serviceTitle} من ${o.name}`,
+                  time: o.createdAt,
+                  type: 'order',
+                  icon: Ticket
+              });
+          });
+      } else {
+          if (!isGuest) {
+              userOrders.filter(o => o.status !== 'pending').forEach(o => {
+                  notifs.push({
+                      id: o.id + '_update',
+                      title: o.status === 'approved' ? 'مبارك! تم قبول طلبك' : 'عذراً، تم رفض الطلب',
+                      desc: `طلب: ${o.serviceTitle} ${o.status === 'rejected' && o.rejectionReason ? `- السبب: ${o.rejectionReason}` : ''}`,
+                      time: o.updatedAt || o.createdAt,
+                      type: o.status === 'approved' ? 'success' : 'error',
+                      icon: o.status === 'approved' ? CheckCircle2 : X
+                  });
+              });
+          }
+          dynamicEvents.forEach(e => {
+              notifs.push({
+                  id: e.id,
+                  title: e.postType === 'offer' ? 'عرض جديد!' : 'رحلة جديدة!',
+                  desc: `${e.name} ${e.price ? `بـ ${e.price}` : ''}`,
+                  time: e.createdAt,
+                  type: 'info',
+                  icon: Megaphone
+              });
+          });
+      }
+      return notifs.sort((a, b) => b.time - a.time);
+  }, [allOrders, userOrders, dynamicEvents, isUserAdmin, isGuest]);
 
   const handleAuthSubmit = async (e) => {
       e.preventDefault();
@@ -232,14 +279,15 @@ export default function App() {
       setAuthLoading(false);
   };
 
-  const handleLogout = () => {
+  const executeLogout = () => {
       localStorage.removeItem('sh_user');
       localStorage.removeItem('sh_token');
       const guestUser = { uid: 'guest_' + Date.now(), isGuest: true };
       setUser(guestUser);
       setShowAdminPanel(false);
       setActiveView('main');
-      addToast('تم تسجيل الخروج', 'info');
+      setLogoutConfirm(false);
+      addToast('تم تسجيل الخروج بنجاح', 'info');
   };
 
   const handleSaveCarPrice = async (e) => {
@@ -486,14 +534,57 @@ export default function App() {
 
       {/* Header */}
       <header className="p-5 sticky top-10 z-50 bg-[#0B192C]/95 backdrop-blur-xl border-b border-white/5 flex justify-between items-center shadow-xl">
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => {setActiveView('main'); setShowAdminPanel(false); setSelectedCategory(null); setSelectedHotel(null); setSelectedCity(null); setSelectedBusType(null);}}>
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => {setActiveView('main'); setShowAdminPanel(false); setSelectedCategory(null); setSelectedHotel(null); setSelectedCity(null); setSelectedBusType(null); setShowNotifications(false);}}>
            <HTLogo />
            <div className="flex flex-col text-right">
                 <h1 className="text-lg font-black italic text-white leading-none">شهبا <span className="text-emerald-400">Go</span></h1>
                 <span className="text-[8px] text-white/40 font-bold uppercase tracking-widest mt-1">By Tatari & Hammash</span>
            </div>
         </div>
+        
         <div className="flex items-center gap-2">
+            {/* التنبيهات (الجرس) */}
+            <div className="relative">
+                <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 rounded-xl border border-white/10 bg-white/5 text-slate-300 hover:text-white transition-colors">
+                    <BellRing size={16} className={notifications.length > 0 ? "animate-pulse text-amber-400" : ""} />
+                    {notifications.length > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-rose-500 rounded-full text-[9px] font-black flex items-center justify-center text-white shadow-lg border border-[#0B192C]">
+                            {notifications.length > 9 ? '+9' : notifications.length}
+                        </span>
+                    )}
+                </button>
+                
+                {/* قائمة التنبيهات المنسدلة */}
+                {showNotifications && (
+                    <>
+                        <div className="fixed inset-0 z-[8900]" onClick={() => setShowNotifications(false)}></div>
+                        <div className="absolute top-12 left-0 w-72 bg-[#112240] border border-white/10 rounded-2xl shadow-2xl p-4 z-[9000] max-h-96 overflow-y-auto animate-in zoom-in-95">
+                            <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2">
+                               <h3 className="text-sm font-black text-white">التنبيهات</h3>
+                               <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">{notifications.length} جديد</span>
+                            </div>
+                            <div className="space-y-2">
+                               {notifications.length === 0 ? (
+                                   <p className="text-[10px] text-white/40 text-center py-6 font-bold">لا يوجد تنبيهات حالياً</p>
+                               ) : notifications.map(n => (
+                                   <div key={n.id} onClick={() => setShowNotifications(false)} className="text-right p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer flex gap-3">
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${n.type === 'error' ? 'bg-rose-500/10 text-rose-400' : n.type === 'success' ? 'bg-emerald-500/10 text-emerald-400' : n.type === 'order' ? 'bg-amber-500/10 text-amber-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                                          <n.icon size={14} />
+                                      </div>
+                                      <div className="flex-1">
+                                          <h4 className="text-[11px] font-black text-white">{n.title}</h4>
+                                          <p className="text-[9px] text-white/60 mt-0.5">{n.desc}</p>
+                                          <span className="text-[8px] text-white/30 mt-1.5 block">{formatDateTime(n.time)}</span>
+                                      </div>
+                                   </div>
+                               ))}
+                            </div>
+                        </div>
+                    </>
+                )}
+            </div>
+
+            {/* زر المحفظة للزبائن (يختفي إذا كان أدمن داخل لوحة الإدارة) */}
             {(!isUserAdmin || !showAdminPanel) && (
                 <button onClick={() => {setActiveView('wallet'); setSelectedCategory(null);}} className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 rounded-xl text-emerald-400 hover:bg-emerald-500/30 transition-colors">
                     <Gift size={14}/>
@@ -501,24 +592,43 @@ export default function App() {
                 </button>
             )}
             
+            {/* زر الإدارة (يظهر بوضوح دائماً للأدمن بجانب تسجيل الخروج) */}
             {isUserAdmin && (
-                <button onClick={() => setShowAdminPanel(!showAdminPanel)} className={`px-4 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border transition-all ${showAdminPanel ? 'bg-amber-500/10 text-amber-400 border-amber-500/50' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'}`}>
+                <button onClick={() => setShowAdminPanel(!showAdminPanel)} className={`px-4 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border transition-all ${showAdminPanel ? 'bg-amber-500/10 text-amber-400 border-amber-500/50' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'}`}>
                    {showAdminPanel ? <LayoutGrid size={14} /> : <Settings size={14}/>}
                    {showAdminPanel ? 'المتجر' : 'الإدارة'}
                 </button>
             )}
 
+            {/* الدخول / الخروج */}
             {isGuest ? (
-                <button onClick={() => setAuthModal('login')} className="px-3 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border border-white/10 bg-white/5 text-slate-300">
+                <button onClick={() => setAuthModal('login')} className="px-3 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border border-white/10 bg-white/5 text-slate-300 hover:text-white transition-colors">
                     <LogIn size={14} /> دخول
                 </button>
             ) : (
-                <button onClick={handleLogout} className="p-2 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400">
-                    <LogOut size={14} />
+                <button onClick={() => setLogoutConfirm(true)} className="p-2 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white transition-all">
+                    <LogOut size={16} />
                 </button>
             )}
         </div>
       </header>
+
+      {/* Logout Confirmation Modal */}
+      {logoutConfirm && (
+        <div className="fixed inset-0 bg-black/95 z-[9000] flex items-center justify-center p-6 backdrop-blur-sm">
+           <div className="bg-[#112240] p-8 rounded-[3rem] border border-rose-500/20 text-center shadow-2xl max-w-sm w-full animate-in zoom-in-95">
+              <div className="w-20 h-20 bg-rose-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-rose-500/20">
+                  <LogOut size={32} className="text-rose-500" />
+              </div>
+              <h3 className="text-xl font-black text-white mb-2">تسجيل الخروج</h3>
+              <p className="text-xs text-white/50 mb-8 font-bold">هل أنت متأكد أنك تريد تسجيل الخروج من حسابك؟</p>
+              <div className="flex gap-3">
+                 <button onClick={executeLogout} className="flex-1 bg-rose-600 py-4 rounded-2xl font-black text-xs text-white shadow-lg active:scale-95 transition-all">نعم، خروج</button>
+                 <button onClick={() => setLogoutConfirm(false)} className="flex-1 bg-white/5 py-4 rounded-2xl font-black text-xs text-white hover:bg-white/10 transition-all">تراجع</button>
+              </div>
+           </div>
+        </div>
+      )}
 
       {/* Auth Modal */}
       {authModal && (
