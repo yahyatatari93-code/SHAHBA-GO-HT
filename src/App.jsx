@@ -530,8 +530,16 @@ export default function App() {
             <HTLogo size="large" />
             <div className="absolute -bottom-4 -right-4 w-12 h-12 bg-white/10 rounded-full blur-xl animate-ping"></div>
         </div>
-        <h1 className="text-5xl font-black text-white italic tracking-tighter text-center leading-none uppercase mb-2 drop-shadow-lg">شهبا <span className="text-emerald-400">Go</span></h1>
-        <p className="text-emerald-400 font-bold text-sm mb-8 tracking-widest uppercase opacity-80">هدفنا راحتك</p>
+        <h1 className="text-5xl font-black text-white italic tracking-tighter text-center leading-none uppercase mb-1 drop-shadow-lg">شهبا <span className="text-emerald-400">Go</span></h1>
+        
+        {/* التوقيع الاحترافي 1 - شاشة البداية */}
+        <div className="flex items-center gap-3 mb-6 opacity-80">
+            <div className="h-px w-8 bg-gradient-to-l from-emerald-500 to-transparent"></div>
+            <span className="text-[11px] text-white tracking-[0.3em] font-light uppercase">Hammash & Tatari</span>
+            <div className="h-px w-8 bg-gradient-to-r from-emerald-500 to-transparent"></div>
+        </div>
+
+        <p className="text-emerald-400 font-bold text-sm tracking-widest uppercase opacity-80">هدفنا راحتك</p>
       </div>
     );
   }
@@ -565,8 +573,12 @@ export default function App() {
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => {setActiveView('main'); setShowAdminPanel(false); setSelectedCategory(null); setSelectedHotel(null); setSelectedCity(null); setSelectedBusType(null); setShowNotifications(false);}}>
            <HTLogo />
            <div className="flex flex-col text-right">
-                <h1 className="text-lg font-black italic text-white leading-none">شهبا <span className="text-emerald-400">Go</span></h1>
-                <span className="text-[8px] text-white/40 font-bold uppercase tracking-widest mt-1">By Tatari & Hammash</span>
+                <h1 className="text-lg font-black italic text-white leading-none mb-1">شهبا <span className="text-emerald-400">Go</span></h1>
+                
+                {/* التوقيع الاحترافي 2 - الهيدر */}
+                <span className="text-[7px] text-emerald-400/80 font-bold uppercase tracking-[0.15em] bg-emerald-500/10 px-1.5 py-0.5 rounded inline-block w-fit">
+                    Hammash & Tatari
+                </span>
            </div>
         </div>
         
@@ -904,9 +916,14 @@ export default function App() {
                    <img src="/main-bg.jpg?v=3" className="w-full h-full object-cover opacity-50" alt="Travel Hero"/>
                    <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-transparent"></div>
                    <div className="absolute top-6 left-6"><HTLogo /></div>
-                   <div className="absolute bottom-6 right-6 text-right">
-                      <h2 className="text-3xl font-black italic uppercase leading-none">شهبا <span className="text-emerald-400">Go</span></h2>
-                      <p className="text-xs text-white/80 font-bold mt-2">نصلك أينما كنت، ونأخذك حيثما تريد.</p>
+                   
+                   {/* التوقيع الاحترافي 3 - الواجهة الرئيسية */}
+                   <div className="absolute bottom-6 right-6 text-right z-10">
+                      <h2 className="text-3xl font-black italic uppercase leading-none mb-1.5 drop-shadow-lg">شهبا <span className="text-emerald-400">Go</span></h2>
+                      <div className="inline-block bg-black/40 backdrop-blur-md border border-white/10 px-2.5 py-1 rounded-lg mb-3 shadow-lg">
+                          <span className="text-[8px] text-emerald-300 font-medium uppercase tracking-[0.2em]">Hammash & Tatari</span>
+                      </div>
+                      <p className="text-xs text-white/90 font-bold drop-shadow-md">نصلك أينما كنت، ونأخذك حيثما تريد.</p>
                    </div>
                 </div>
 
