@@ -472,7 +472,10 @@ export default function App() {
     if (order.serviceType === 'bus') return `ترفيهي: ${order.tripDate}`;
     if (order.serviceType === 'flights') return `من ${order.fromAirport} لـ ${order.toAirport} بتاريخ ${order.flightDate}`;
     if (order.serviceType === 'transit') return `من ${order.fromLocation} إلى ${order.toLocation} | ${order.transitType} | حقائب: ${order.bagsCount || '1'} | موعد: ${order.tripDate} ${order.tripTime}`;
-    if (order.serviceType === 'services') return `الخدمة المطلوبة مسجلة`;
+    if (order.serviceType === 'services') {
+       if (order.fromCity && order.toCity) return `من: ${order.fromCity} إلى: ${order.toCity}`;
+       return `الخدمة المطلوبة مسجلة`;
+    }
     if (order.serviceType === 'events') return `عدد: ${order.paxCount}`;
     return 'تفاصيل عامة';
   };
@@ -1271,6 +1274,18 @@ export default function App() {
                  {/* SERVICES SPECIFIC FIELDS */}
                  {selectedCategory === 'services' && (
                    <div className="space-y-3 p-4 bg-slate-500/5 rounded-3xl border border-slate-500/10">
+                      {bookingItem?.id === 'mail' && (
+                         <div className="grid grid-cols-2 gap-3 mb-2">
+                             <div className="space-y-1 text-right">
+                                 <label className="text-[9px] text-slate-400 font-bold">من مدينة</label>
+                                 <input name="fromCity" required placeholder="مثال: حلب" defaultValue={bookingItem?.fromCity || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-slate-500 shadow-inner" />
+                             </div>
+                             <div className="space-y-1 text-right">
+                                 <label className="text-[9px] text-slate-400 font-bold">إلى مدينة</label>
+                                 <input name="toCity" required placeholder="مثال: دمشق" defaultValue={bookingItem?.toCity || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-slate-500 shadow-inner" />
+                             </div>
+                         </div>
+                      )}
                       <label className="text-[9px] text-slate-400 font-bold">يرجى كتابة التفاصيل الدقيقة للمعاملة أو الأوراق:</label>
                       <textarea name="serviceDetails" required defaultValue={bookingItem?.serviceDetails || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right h-24 outline-none focus:border-slate-500" placeholder="تفاصيل الخدمة المطلوبة..."></textarea>
                    </div>
