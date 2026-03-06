@@ -58,9 +58,36 @@ const CITIES = [
 ];
 
 const HOTELS_DATA = [
-  { id: 'h_alp_1', cityId: 'aleppo', name: 'فندق شهباء حلب', desc: 'إطلالة بانورامية', img: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=400' },
-  { id: 'h_alp_2', cityId: 'aleppo', name: 'فندق الشيراتون', desc: 'قلب المدينة العريق', img: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=400' },
-  { id: 'h_dam_1', cityId: 'damascus', name: 'فندق فور سيزونز', desc: 'فخامة العاصمة', img: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=400' },
+  { 
+      id: 'h_alp_1', cityId: 'aleppo', name: 'فندق شهباء حلب', desc: 'إطلالة بانورامية', 
+      img: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=400',
+      gallery: [
+          'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=400',
+          'https://images.unsplash.com/photo-1611892440504-42a792e24d32?q=80&w=400', // غرفة
+          'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?q=80&w=400', // حمام
+          'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?q=80&w=400'  // مسبح
+      ]
+  },
+  { 
+      id: 'h_alp_2', cityId: 'aleppo', name: 'فندق الشيراتون', desc: 'قلب المدينة العريق', 
+      img: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=400',
+      gallery: [
+          'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=400',
+          'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=400', // غرفة ديلوكس
+          'https://images.unsplash.com/photo-1618773928121-c32242e63f39?q=80&w=400', // مطعم
+          'https://images.unsplash.com/photo-1578683010236-d716f9a3f461?q=80&w=400'  // لوبي
+      ]
+  },
+  { 
+      id: 'h_dam_1', cityId: 'damascus', name: 'فندق فور سيزونز', desc: 'فخامة العاصمة', 
+      img: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=400',
+      gallery: [
+          'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=400',
+          'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?q=80&w=400', // جناح
+          'https://images.unsplash.com/photo-1595576508898-0ad5c879a061?q=80&w=400', // إطلالة
+          'https://images.unsplash.com/photo-1540518614846-7eded433c457?q=80&w=400'  // مرافق
+      ]
+  },
 ];
 
 const ROOM_TYPES = [
@@ -141,7 +168,9 @@ export default function App() {
   const [carsList, setCarsList] = useState(DEFAULT_CARS); 
   const [editingCar, setEditingCar] = useState(null); 
   const [bookingItem, setBookingItem] = useState(null);
-  
+  const [globalAlerts, setGlobalAlerts] = useState([]); // التنبيهات الإدارية
+  const [activeGalleryImg, setActiveGalleryImg] = useState(null); // 🌟 لحفظ الصورة المفتوحة في الفندق
+
   const [rejectModal, setRejectModal] = useState(null); 
   const [rejectReasonText, setRejectReasonText] = useState("");
   const [showSuccessCard, setShowSuccessCard] = useState(false);
@@ -158,6 +187,26 @@ export default function App() {
     setToasts(prev => [...prev, { id, msg, type, title }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 6000);
   };
+
+  // 🌟 نظام الظهور التلقائي (المنبثق) للتنبيهات الجديدة للعملاء 🌟
+  useEffect(() => {
+      if (globalAlerts && globalAlerts.length > 0 && !isUserAdmin) {
+          const latest = globalAlerts[0];
+          const seen = localStorage.getItem('seen_alerts') ? JSON.parse(localStorage.getItem('seen_alerts')) : [];
+          if (!seen.includes(latest.id)) {
+              setSelectedNotification({
+                  id: latest.id,
+                  title: latest.type === 'special' ? '🌟 عرض حصري 🌟' : 'تنبيه من الإدارة',
+                  desc: latest.message,
+                  time: latest.createdAt,
+                  type: latest.type === 'special' ? 'special' : latest.type === 'success' ? 'success' : 'info',
+                  icon: latest.type === 'special' ? Sparkles : BellRing
+              });
+              seen.push(latest.id);
+              localStorage.setItem('seen_alerts', JSON.stringify(seen));
+          }
+      }
+  }, [globalAlerts, isUserAdmin]);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 2500); 
@@ -191,6 +240,7 @@ export default function App() {
            const alertsRes = await fetch(`${API_URL}/alerts`).catch(()=>null);
            if (alertsRes && alertsRes.ok) {
                const alrts = await alertsRes.json();
+               setGlobalAlerts(alrts); // حفظ التنبيهات الإدارية
            }
        } catch (err) {
            console.log("صعوبة في الاتصال بالسيرفر. تأكد من إعدادات الـ HTTPS/HTTP");
@@ -205,6 +255,21 @@ export default function App() {
   // حساب التنبيهات ديناميكياً
   const notifications = useMemo(() => {
       let notifs = [];
+      
+      // التنبيهات الإدارية (تظهر للجميع)
+      if (globalAlerts) {
+          globalAlerts.forEach(alert => {
+              notifs.push({
+                  id: alert.id,
+                  title: alert.type === 'special' ? '🌟 تنبيه هام جداً 🌟' : alert.type === 'success' ? 'خبر سار!' : 'إشعار من الإدارة',
+                  desc: alert.message,
+                  time: alert.createdAt,
+                  type: alert.type === 'special' ? 'special' : alert.type === 'success' ? 'success' : 'info',
+                  icon: alert.type === 'special' ? Sparkles : BellRing
+              });
+          });
+      }
+
       if (isUserAdmin) {
           allOrders.filter(o => o.status === 'pending').forEach(o => {
               notifs.push({
@@ -241,7 +306,7 @@ export default function App() {
           });
       }
       return notifs.sort((a, b) => b.time - a.time);
-  }, [allOrders, userOrders, dynamicEvents, isUserAdmin, isGuest]);
+  }, [allOrders, userOrders, dynamicEvents, globalAlerts, isUserAdmin, isGuest]);
 
   // التفاعل عند الضغط على إشعار
   const handleNotificationClick = (n) => {
@@ -256,7 +321,7 @@ export default function App() {
       } else if (n.type === 'success' || n.type === 'error') {
           setShowAdminPanel(false);
           setActiveView('bookings');
-      } else if (n.type === 'info') {
+      } else if (n.type === 'info' && n.icon === Megaphone) {
           setShowAdminPanel(false);
           setActiveView('list');
           setSelectedCategory('events');
@@ -455,10 +520,16 @@ export default function App() {
     const formData = new FormData(e.target);
     const alertData = { message: formData.get('message'), type: formData.get('type') };
     try {
-        await fetch(`${API_URL}/alerts`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(alertData) });
-    } catch(err) {}
+        const res = await fetch(`${API_URL}/alerts`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(alertData) });
+        if (res.ok) {
+            const data = await res.json();
+            setGlobalAlerts(prev => [data.alert, ...(prev || [])]);
+        }
+    } catch(err) {
+        setGlobalAlerts(prev => [{ id: 'alt_' + Date.now(), ...alertData, createdAt: Date.now() }, ...(prev || [])]);
+    }
     e.target.reset();
-    addToast('تم إرسال التنبيه المباشر!', 'success');
+    addToast('تم إرسال التنبيه وسيظهر للعملاء فوراً!', 'success');
   };
 
   const renderOrderInfo = (order) => {
@@ -559,8 +630,8 @@ export default function App() {
                 كل ما تحتاجه في عالم السياحة والسفر
             </span>
             {dynamicEvents.map(ev => (
-                <span key={ev.id} className="text-[10px] font-black text-emerald-400 flex items-center gap-2">
-                    <span className="mx-4 text-white/30 font-light">|</span>
+                <span key={ev.id} className="text-[10px] font-black text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)] flex items-center gap-2">
+                    <span className="mx-4 text-white/30 font-light drop-shadow-none">|</span>
                     {ev.postType === 'offer' ? <Megaphone size={12}/> : <MapPin size={12}/>} 
                     {ev.name} {ev.price ? `• ${ev.price}` : ''}
                 </span>
@@ -608,11 +679,17 @@ export default function App() {
                                    <p className="text-[10px] text-white/40 text-center py-6 font-bold">لا يوجد تنبيهات حالياً</p>
                                ) : notifications.map(n => (
                                    <div key={n.id} onClick={() => handleNotificationClick(n)} className="text-right p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer flex gap-3">
-                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${n.type === 'error' ? 'bg-rose-500/10 text-rose-400' : n.type === 'success' ? 'bg-emerald-500/10 text-emerald-400' : n.type === 'order' ? 'bg-amber-500/10 text-amber-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                                          n.type === 'error' ? 'bg-rose-500/10 text-rose-400' : 
+                                          n.type === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 
+                                          n.type === 'order' ? 'bg-amber-500/10 text-amber-400' : 
+                                          n.type === 'special' ? 'bg-gradient-to-br from-amber-400 to-yellow-600 text-white shadow-lg shadow-yellow-500/30' : 
+                                          'bg-blue-500/10 text-blue-400'
+                                      }`}>
                                           <n.icon size={14} />
                                       </div>
                                       <div className="flex-1">
-                                          <h4 className="text-[11px] font-black text-white">{n.title}</h4>
+                                          <h4 className={`text-[11px] font-black ${n.type === 'special' ? 'text-amber-400' : 'text-white'}`}>{n.title}</h4>
                                           <p className="text-[9px] text-white/60 mt-0.5 truncate">{n.desc}</p>
                                           <span className="text-[8px] text-white/30 mt-1.5 block">{formatDateTime(n.time)}</span>
                                       </div>
@@ -661,17 +738,19 @@ export default function App() {
                     selectedNotification.type === 'error' ? 'bg-rose-500/20 text-rose-500 border-rose-500/30' :
                     selectedNotification.type === 'success' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
                     selectedNotification.type === 'order' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
+                    selectedNotification.type === 'special' ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.5)]' :
                     'bg-blue-500/20 text-blue-400 border-blue-500/30'
                 }`}>
                     <selectedNotification.icon size={36} className="animate-pulse" />
                 </div>
-                <h3 className="text-xl font-black text-white mb-3">{selectedNotification.title}</h3>
-                <p className="text-sm text-white/70 mb-8 font-bold leading-relaxed">{selectedNotification.desc}</p>
+                <h3 className={`text-xl font-black mb-3 ${selectedNotification.type === 'special' ? 'text-amber-400 drop-shadow-md' : 'text-white'}`}>{selectedNotification.title}</h3>
+                <p className="text-sm text-white/90 mb-8 font-bold leading-relaxed">{selectedNotification.desc}</p>
                 <p className="text-[10px] text-white/30 mb-6">{formatDateTime(selectedNotification.time)}</p>
                 <button onClick={() => setSelectedNotification(null)} className={`w-full py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all ${
                     selectedNotification.type === 'error' ? 'bg-rose-500 text-white' :
                     selectedNotification.type === 'success' ? 'bg-emerald-500 text-black' :
                     selectedNotification.type === 'order' ? 'bg-amber-500 text-black' :
+                    selectedNotification.type === 'special' ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-black shadow-yellow-500/30' :
                     'bg-blue-500 text-white'
                 }`}>
                     حسناً، فهمت
@@ -986,7 +1065,7 @@ export default function App() {
                <div className="space-y-6 animate-in max-w-xl mx-auto">
                   <div className="flex items-center gap-4 bg-[#112240] p-4 rounded-3xl border border-white/5 shadow-lg">
                      <button onClick={() => {
-                       if (selectedCategory === 'hotel' && selectedHotel) { setSelectedHotel(null); }
+                       if (selectedCategory === 'hotel' && selectedHotel) { setSelectedHotel(null); setActiveGalleryImg(null); }
                        else if (selectedCategory === 'hotel' && selectedCity) { setSelectedCity(null); }
                        else if (selectedCategory === 'bus' && selectedBusType) { setSelectedBusType(null); }
                        else { setActiveView('main'); setSelectedCategory(null); setSelectedBusType(null); setSelectedCity(null); }
@@ -1111,16 +1190,40 @@ export default function App() {
                             </div>
                          </div>
                     ))}
-                    {selectedCategory === 'hotel' && selectedHotel && ROOM_TYPES.map(room => (
-                         <button key={room.id} onClick={() => setBookingItem(room)} className="w-full p-6 bg-[#112240] border border-white/5 rounded-[2.5rem] flex items-center gap-5 text-right shadow-lg hover:bg-white/5 transition-all group">
-                            <div className="w-12 h-12 bg-amber-500/10 text-amber-500 rounded-xl flex items-center justify-center group-hover:bg-amber-500 group-hover:text-black transition-colors"><room.icon size={20}/></div>
-                            <div className="flex-1">
-                               <h4 className="font-black text-base">{room.name}</h4>
-                               <p className="text-[10px] text-white/40">{room.desc}</p>
+                    
+                    {selectedCategory === 'hotel' && selectedHotel && (
+                         <div className="space-y-6 animate-in fade-in">
+                            {/* 🌟 معرض صور الفندق 🌟 */}
+                            <div className="bg-[#112240] p-4 rounded-[2.5rem] border border-white/5 shadow-lg">
+                                <img src={activeGalleryImg || selectedHotel.img} className="w-full h-56 object-cover rounded-[2rem] mb-4 shadow-inner transition-all duration-300" alt={selectedHotel.name} />
+                                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide px-1">
+                                    {selectedHotel.gallery?.map((imgUrl, idx) => (
+                                        <img 
+                                            key={idx} 
+                                            src={imgUrl} 
+                                            onClick={() => setActiveGalleryImg(imgUrl)}
+                                            className={`w-16 h-16 object-cover rounded-2xl shrink-0 cursor-pointer border-2 transition-all ${
+                                                (activeGalleryImg || selectedHotel.img) === imgUrl ? 'border-amber-500 opacity-100 shadow-lg scale-105' : 'border-transparent opacity-50 hover:opacity-100 hover:scale-105'
+                                            }`}
+                                            alt={`صورة ${idx + 1}`}
+                                        />
+                                    ))}
+                                </div>
                             </div>
-                            <Plus size={20} className="text-white/20 group-hover:text-amber-400"/>
-                         </button>
-                    ))}
+
+                            <h3 className="text-lg font-black text-white px-2 flex items-center gap-2"><BedDouble className="text-amber-500"/> الغرف المتوفرة للحجز</h3>
+                            {ROOM_TYPES.map(room => (
+                                 <button key={room.id} onClick={() => setBookingItem(room)} className="w-full p-6 bg-[#112240] border border-white/5 rounded-[2.5rem] flex items-center gap-5 text-right shadow-lg hover:bg-white/5 transition-all group">
+                                    <div className="w-12 h-12 bg-amber-500/10 text-amber-500 rounded-xl flex items-center justify-center group-hover:bg-amber-500 group-hover:text-black transition-colors"><room.icon size={20}/></div>
+                                    <div className="flex-1">
+                                       <h4 className="font-black text-base">{room.name}</h4>
+                                       <p className="text-[10px] text-white/40">{room.desc}</p>
+                                    </div>
+                                    <Plus size={20} className="text-white/20 group-hover:text-amber-400"/>
+                                 </button>
+                            ))}
+                         </div>
+                    )}
 
                     {/* EVENTS */}
                     {selectedCategory === 'events' && dynamicEvents.filter(ev => ev.postType !== 'offer').map(event => {
