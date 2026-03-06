@@ -621,7 +621,7 @@ export default function App() {
 
       {/* Ticker Banner */}
       <div className="bg-emerald-500/10 border-b border-emerald-500/20 py-2.5 overflow-hidden whitespace-nowrap sticky top-0 z-40 backdrop-blur-md">
-        <div className="flex animate-marquee space-x-12 space-x-reverse items-center">
+        <div className="flex animate-marquee hover:[animation-play-state:paused] space-x-12 space-x-reverse items-center">
             <span className="text-[10px] font-black text-emerald-400 flex items-center gap-4">
                 <Sparkles size={12}/> 
                 نصلك أينما كنت، ونأخذك حيثما تريد • هدفنا راحتك
@@ -630,7 +630,16 @@ export default function App() {
                 كل ما تحتاجه في عالم السياحة والسفر
             </span>
             {dynamicEvents.map(ev => (
-                <span key={ev.id} className="text-[10px] font-black text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)] flex items-center gap-2">
+                <span 
+                    key={ev.id} 
+                    onClick={() => {
+                        setShowAdminPanel(false);
+                        setActiveView('list');
+                        setSelectedCategory('events');
+                        setBookingItem(ev);
+                    }}
+                    className="text-[10px] font-black text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)] flex items-center gap-2 cursor-pointer hover:brightness-125 transition-all"
+                >
                     <span className="mx-4 text-white/30 font-light drop-shadow-none">|</span>
                     {ev.postType === 'offer' ? <Megaphone size={12}/> : <MapPin size={12}/>} 
                     {ev.name} {ev.price ? `• ${ev.price}` : ''}
@@ -1280,6 +1289,26 @@ export default function App() {
                  <p className="text-[10px] text-emerald-400 font-bold mt-1 uppercase tracking-widest">{bookingItem.name || bookingItem.title || bookingItem.serviceTitle}</p>
               </div>
 
+              {/* 🌟 تفاصيل الفعالية (تظهر فقط عند حجز الفعاليات والرحلات) 🌟 */}
+              {selectedCategory === 'events' && bookingItem?.desc && (
+                  <div className="bg-[#0B192C] border border-emerald-500/20 p-4 rounded-2xl mb-6 text-right shadow-inner">
+                      <h4 className="text-xs font-black text-emerald-400 mb-2 flex items-center gap-1.5">
+                          <Info size={14}/> تفاصيل الرحلة / العرض
+                      </h4>
+                      <p className="text-[11px] text-white/80 leading-relaxed mb-3 whitespace-pre-wrap">
+                          {bookingItem.desc}
+                      </p>
+                      <div className="flex justify-between items-center text-[10px] font-bold border-t border-white/5 pt-3 mt-1">
+                          {bookingItem.date ? (
+                              <span className="text-white/50 flex items-center gap-1.5"><Calendar size={12}/> {bookingItem.date}</span>
+                          ) : <span></span>}
+                          {bookingItem.price && (
+                              <span className="text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20">{bookingItem.price}</span>
+                          )}
+                      </div>
+                  </div>
+              )}
+
               <form onSubmit={submitBooking} className="space-y-4 text-right">
                  
                  {/* CONTACT INFO */}
@@ -1597,7 +1626,8 @@ export default function App() {
         .animate-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-marquee { animation: marquee 20s linear infinite; }
-        @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+        .animate-marquee:hover { animation-play-state: paused; }
+        @keyframes marquee { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
         select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: left 0.75rem center; background-size: 1rem; }
       `}</style>
     </div>
