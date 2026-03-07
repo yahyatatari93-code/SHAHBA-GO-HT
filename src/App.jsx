@@ -180,6 +180,12 @@ export default function App() {
 
   const [showNotifications, setShowNotifications] = useState(false); 
   const [selectedNotification, setSelectedNotification] = useState(null); // للرسالة المنبثقة في وسط الشاشة
+  
+  // 🌟 حالة التنبيهات المقروءة لإنقاص الرقم الذكي 🌟
+  const [readNotifs, setReadNotifs] = useState(() => {
+      const saved = localStorage.getItem('sh_read_notifs');
+      return saved ? JSON.parse(saved) : [];
+  });
 
   const [toasts, setToasts] = useState([]);
   const addToast = (msg, type = 'info', title = '') => {
@@ -204,6 +210,16 @@ export default function App() {
               });
               seen.push(latest.id);
               localStorage.setItem('seen_alerts', JSON.stringify(seen));
+              
+              // تحديد كـ مقروء حتى لا يزعجه الرقم في الجرس أيضاً بعد قراءتها المنبثقة
+              setReadNotifs(prev => {
+                  if (!prev.includes(latest.id)) {
+                      const updated = [...prev, latest.id];
+                      localStorage.setItem('sh_read_notifs', JSON.stringify(updated));
+                      return updated;
+                  }
+                  return prev;
+              });
           }
       }
   }, [globalAlerts, isUserAdmin]);
@@ -310,6 +326,13 @@ export default function App() {
 
   // التفاعل عند الضغط على إشعار
   const handleNotificationClick = (n) => {
+      // 🌟 تعليم التنبيه كمقروء لإنقاص الرقم الأحمر 🌟
+      if (!readNotifs.includes(n.id)) {
+          const newRead = [...readNotifs, n.id];
+          setReadNotifs(newRead);
+          localStorage.setItem('sh_read_notifs', JSON.stringify(newRead));
+      }
+
       setShowNotifications(false);
       setSelectedNotification(n); // إظهار النافذة المنبثقة في المنتصف
 
@@ -598,6 +621,9 @@ export default function App() {
     return <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border ${styles[status]}`}>{labels[status]}</span>;
   };
 
+  // 🌟 حساب عدد التنبيهات غير المقروءة 🌟
+  const unreadCount = notifications.filter(n => !readNotifs.includes(n.id)).length;
+
   const ToastContainer = () => (
     <div className="fixed top-4 left-0 right-0 z-[8000] flex flex-col items-center gap-2 pointer-events-none px-4">
       {toasts.map(toast => {
@@ -693,10 +719,10 @@ export default function App() {
             {/* التنبيهات (الجرس) */}
             <div className="relative">
                 <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 rounded-xl border border-white/10 bg-white/5 text-slate-300 hover:text-white transition-colors">
-                    <BellRing size={16} className={notifications.length > 0 ? "animate-pulse text-amber-400" : ""} />
-                    {notifications.length > 0 && (
+                    <BellRing size={16} className={unreadCount > 0 ? "animate-pulse text-amber-400" : ""} />
+                    {unreadCount > 0 && (
                         <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-rose-500 rounded-full text-[9px] font-black flex items-center justify-center text-white shadow-lg border border-[#0B192C]">
-                            {notifications.length > 9 ? '+9' : notifications.length}
+                            {unreadCount > 9 ? '+9' : unreadCount}
                         </span>
                     )}
                 </button>
@@ -708,14 +734,24 @@ export default function App() {
                         <div className="absolute top-12 left-0 w-72 bg-[#112240] border border-white/10 rounded-2xl shadow-2xl p-4 z-[9000] max-h-96 overflow-y-auto animate-in zoom-in-95">
                             <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2">
                                <h3 className="text-sm font-black text-white">التنبيهات</h3>
-                               <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">{notifications.length} جديد</span>
+                               {unreadCount > 0 && (
+                                   <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">{unreadCount} جديد</span>
+                               )}
                             </div>
                             <div className="space-y-2">
                                {notifications.length === 0 ? (
                                    <p className="text-[10px] text-white/40 text-center py-6 font-bold">لا يوجد تنبيهات حالياً</p>
                                ) : notifications.map(n => (
-                                   <div key={n.id} onClick={() => handleNotificationClick(n)} className="text-right p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer flex gap-3">
-                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                                   <div key={n.id} onClick={() => handleNotificationClick(n)} className={`text-right p-3 rounded-xl border transition-all cursor-pointer flex gap-3 relative overflow-hidden ${
+                                       readNotifs.includes(n.id) 
+                                       ? 'bg-white/5 border-white/5 opacity-60 hover:opacity-100' 
+                                       : 'bg-[#1e293b] border-white/10 hover:bg-white/20 shadow-md'
+                                   }`}>
+                                      {/* نقطة الإشعار غير المقروء */}
+                                      {!readNotifs.includes(n.id) && (
+                                          <div className="absolute top-3 left-3 w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                                      )}
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10 ${
                                           n.type === 'error' ? 'bg-rose-500/10 text-rose-400' : 
                                           n.type === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 
                                           n.type === 'order' ? 'bg-amber-500/10 text-amber-400' : 
@@ -724,8 +760,8 @@ export default function App() {
                                       }`}>
                                           <n.icon size={14} />
                                       </div>
-                                      <div className="flex-1">
-                                          <h4 className={`text-[11px] font-black ${n.type === 'special' ? 'text-amber-400' : 'text-white'}`}>{n.title}</h4>
+                                      <div className="flex-1 z-10">
+                                          <h4 className={`text-[11px] font-black ${n.type === 'special' && !readNotifs.includes(n.id) ? 'text-amber-400' : 'text-white'}`}>{n.title}</h4>
                                           <p className="text-[9px] text-white/60 mt-0.5 truncate">{n.desc}</p>
                                           <span className="text-[8px] text-white/30 mt-1.5 block">{formatDateTime(n.time)}</span>
                                       </div>
