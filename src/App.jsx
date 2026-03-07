@@ -17,12 +17,12 @@ import {
 // ==========================================
 const API_URL = 'https://api.shahba-go.com/api';
 
-// 🛑 قائمة حسابات الإدارة 🛑
+// 🛑 قائمة حسابات الإدارة المحدثة 🛑
 const ADMIN_ACCOUNTS = [
   'yahya.tatari93@gmail.com',
-  'manager@ht.com',
+  'hammash.travel@gmail.com',
+  '00963944299060',
   '+963944299060',
-  '+963987654321',
   '00963955490049',
   '+963955490049'
 ];
@@ -328,8 +328,34 @@ export default function App() {
       }
   };
 
-  const handleAuthSubmit = async (e) => {
+  // 🌟 نظام إرسال رمز التحقق الديناميكي 🌟
+  const handleAction = async (e) => {
       e.preventDefault();
+      
+      if (authModal === 'signup' && !otpSent) {
+          setAuthLoading(true);
+          setTimeout(() => {
+              setAuthLoading(false);
+              setOtpSent(true);
+              addToast(`تم إرسال رمز التحقق إلى ${authTab === 'email' ? 'البريد الإلكتروني' : 'رقم الهاتف'} (للتجربة أدخل 123456)`, 'success');
+          }, 1500);
+          return;
+      }
+      
+      if (authModal === 'login' && authTab === 'phone' && !otpSent) {
+          setAuthLoading(true);
+          setTimeout(() => {
+              setAuthLoading(false);
+              setOtpSent(true);
+              addToast('تم إرسال رمز التحقق إلى رقم الهاتف (للتجربة أدخل 123456)', 'success');
+          }, 1500);
+          return;
+      }
+
+      handleAuthSubmit(e);
+  };
+
+  const handleAuthSubmit = async (e) => {
       setAuthError('');
       setAuthLoading(true);
 
@@ -559,7 +585,8 @@ export default function App() {
       return filtered;
   };
 
-  const openWhatsApp = () => window.open("https://wa.me/9639xxxxxxxx", "_blank");
+  // 🌟 تعديل رقم الواتساب المخصص لقسم الطيران 🌟
+  const openWhatsApp = () => window.open("https://wa.me/963952490049", "_blank");
 
   const StatusBadge = ({ status }) => {
     const styles = {
@@ -789,7 +816,7 @@ export default function App() {
       {authModal && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[3000] flex items-center justify-center p-4">
            <div className="bg-[#112240] w-full max-w-sm p-8 rounded-[3rem] border border-emerald-500/20 shadow-2xl relative animate-in text-center">
-              <button onClick={() => {setAuthModal(null); setOtpSent(false);}} className="absolute top-6 left-6 text-white/30 hover:text-white"><X size={20}/></button>
+              <button onClick={() => {setAuthModal(null); setOtpSent(false); setOtpCode('');}} className="absolute top-6 left-6 text-white/30 hover:text-white"><X size={20}/></button>
               <div className="flex justify-center mb-6"><HTLogo size="large" /></div>
               
               <h2 className="text-xl font-black text-white mb-6">
@@ -797,23 +824,38 @@ export default function App() {
               </h2>
               
               <div className="flex bg-[#0B192C] p-1 rounded-2xl mb-6 border border-white/5">
-                 <button onClick={() => {setAuthTab('email'); setAuthError('');}} className={`flex-1 py-2.5 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${authTab === 'email' ? 'bg-emerald-500 text-black shadow-md' : 'text-white/40 hover:text-white'}`}>
+                 <button onClick={() => {setAuthTab('email'); setAuthError(''); setOtpSent(false); setOtpCode('');}} className={`flex-1 py-2.5 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${authTab === 'email' ? 'bg-emerald-500 text-black shadow-md' : 'text-white/40 hover:text-white'}`}>
                     <Mail size={14} /> البريد
                  </button>
-                 <button onClick={() => {setAuthTab('phone'); setAuthError(''); setOtpSent(false);}} className={`flex-1 py-2.5 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${authTab === 'phone' ? 'bg-emerald-500 text-black shadow-md' : 'text-white/40 hover:text-white'}`}>
+                 <button onClick={() => {setAuthTab('phone'); setAuthError(''); setOtpSent(false); setOtpCode('');}} className={`flex-1 py-2.5 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${authTab === 'phone' ? 'bg-emerald-500 text-black shadow-md' : 'text-white/40 hover:text-white'}`}>
                     <Phone size={14} /> الهاتف
                  </button>
               </div>
 
               {authError && <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-3 rounded-xl text-xs font-bold mb-4">{authError}</div>}
               
-              <form onSubmit={handleAuthSubmit} className="space-y-4">
+              {/* 🌟 تعديل فورم التسجيل ليتوافق مع نظام رمز التحقق (OTP) للإيميل والهاتف 🌟 */}
+              <form onSubmit={handleAction} className="space-y-4">
                   {authTab === 'email' ? (
                      <>
-                        <input type="email" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="البريد الإلكتروني (مثال: user@mail.com)" />
-                        <input type="password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="كلمة المرور" />
-                        <button type="submit" disabled={authLoading} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all disabled:opacity-50">
-                           {authLoading ? 'جاري المعالجة...' : (authModal === 'login' ? 'دخول آمن' : 'تأكيد وإنشاء الحساب')}
+                        <input type="email" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)} disabled={otpSent && authModal === 'signup'} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500 disabled:opacity-50" placeholder="البريد الإلكتروني (مثال: user@mail.com)" />
+                        
+                        {authModal === 'login' && (
+                            <input type="password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="كلمة المرور" />
+                        )}
+
+                        {authModal === 'signup' && otpSent && (
+                            <div className="animate-in fade-in slide-in-from-top-2 space-y-4">
+                                <input type="text" required value={otpCode} onChange={(e)=>setOtpCode(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-lg tracking-[0.5em] font-black text-white text-center outline-none focus:border-emerald-500" placeholder="123456" maxLength={6} />
+                                <p className="text-[10px] text-white/40 mb-2">تم إرسال الرمز لبريدك الإلكتروني (للتجربة: أدخل أي أرقام)</p>
+                                <input type="password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="اختر كلمة مرور جديدة" />
+                            </div>
+                        )}
+
+                        <button type="submit" disabled={authLoading || (authModal === 'signup' && otpSent && !otpCode)} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all disabled:opacity-50 mt-2">
+                           {authLoading ? 'جاري المعالجة...' : 
+                               (authModal === 'login' ? 'دخول آمن' : 
+                                   (!otpSent ? 'إرسال رمز التحقق' : 'تأكيد وإنشاء الحساب'))}
                         </button>
                      </>
                   ) : (
@@ -831,13 +873,13 @@ export default function App() {
                               </button>
                            </>
                         ) : (
-                           <>
+                           <div className="animate-in fade-in slide-in-from-top-2 space-y-4">
                               <input type="text" required value={otpCode} onChange={(e)=>setOtpCode(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-lg tracking-[0.5em] font-black text-white text-center outline-none focus:border-emerald-500" placeholder="123456" maxLength={6} />
                               <p className="text-[10px] text-white/40">تم إرسال الرمز لرقمك (للتجربة: أدخل أي أرقام)</p>
                               <button type="submit" disabled={authLoading || !otpCode} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all disabled:opacity-50 mt-2">
                                  {authLoading ? 'جاري التأكيد...' : (authModal === 'login' ? 'تأكيد الدخول' : 'تأكيد وإنشاء الحساب')}
                               </button>
-                           </>
+                           </div>
                         )}
                      </>
                   )}
@@ -847,11 +889,11 @@ export default function App() {
               <div className="mt-6 pt-5 border-t border-white/5">
                   {authModal === 'login' ? (
                       <p className="text-[11px] text-white/50 font-bold">
-                          ليس لديك حساب؟ <span onClick={() => {setAuthModal('signup'); setAuthError('');}} className="text-emerald-400 cursor-pointer hover:underline font-black px-1 transition-all">إنشاء حساب جديد</span>
+                          ليس لديك حساب؟ <span onClick={() => {setAuthModal('signup'); setAuthError(''); setOtpSent(false); setOtpCode('');}} className="text-emerald-400 cursor-pointer hover:underline font-black px-1 transition-all">إنشاء حساب جديد</span>
                       </p>
                   ) : (
                       <p className="text-[11px] text-white/50 font-bold">
-                          لديك حساب بالفعل؟ <span onClick={() => {setAuthModal('login'); setAuthError('');}} className="text-emerald-400 cursor-pointer hover:underline font-black px-1 transition-all">تسجيل الدخول</span>
+                          لديك حساب بالفعل؟ <span onClick={() => {setAuthModal('login'); setAuthError(''); setOtpSent(false); setOtpCode('');}} className="text-emerald-400 cursor-pointer hover:underline font-black px-1 transition-all">تسجيل الدخول</span>
                       </p>
                   )}
               </div>
