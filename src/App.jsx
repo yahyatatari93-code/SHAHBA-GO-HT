@@ -63,9 +63,9 @@ const HOTELS_DATA = [
       img: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=400',
       gallery: [
           'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=400',
-          'https://images.unsplash.com/photo-1611892440504-42a792e24d32?q=80&w=400', // غرفة
-          'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?q=80&w=400', // حمام
-          'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?q=80&w=400'  // مسبح
+          'https://images.unsplash.com/photo-1611892440504-42a792e24d32?q=80&w=400',
+          'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?q=80&w=400',
+          'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?q=80&w=400'
       ]
   },
   { 
@@ -73,9 +73,9 @@ const HOTELS_DATA = [
       img: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=400',
       gallery: [
           'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=400',
-          'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=400', // غرفة ديلوكس
-          'https://images.unsplash.com/photo-1618773928121-c32242e63f39?q=80&w=400', // مطعم
-          'https://images.unsplash.com/photo-1578683010236-d716f9a3f461?q=80&w=400'  // لوبي
+          'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=400',
+          'https://images.unsplash.com/photo-1618773928121-c32242e63f39?q=80&w=400',
+          'https://images.unsplash.com/photo-1578683010236-d716f9a3f461?q=80&w=400'
       ]
   },
   { 
@@ -83,9 +83,9 @@ const HOTELS_DATA = [
       img: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=400',
       gallery: [
           'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=400',
-          'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?q=80&w=400', // جناح
-          'https://images.unsplash.com/photo-1595576508898-0ad5c879a061?q=80&w=400', // إطلالة
-          'https://images.unsplash.com/photo-1540518614846-7eded433c457?q=80&w=400'  // مرافق
+          'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?q=80&w=400',
+          'https://images.unsplash.com/photo-1595576508898-0ad5c879a061?q=80&w=400',
+          'https://images.unsplash.com/photo-1540518614846-7eded433c457?q=80&w=400'
       ]
   },
 ];
@@ -168,8 +168,8 @@ export default function App() {
   const [carsList, setCarsList] = useState(DEFAULT_CARS); 
   const [editingCar, setEditingCar] = useState(null); 
   const [bookingItem, setBookingItem] = useState(null);
-  const [globalAlerts, setGlobalAlerts] = useState([]); // التنبيهات الإدارية
-  const [activeGalleryImg, setActiveGalleryImg] = useState(null); // 🌟 لحفظ الصورة المفتوحة في الفندق
+  const [globalAlerts, setGlobalAlerts] = useState([]); 
+  const [activeGalleryImg, setActiveGalleryImg] = useState(null); 
 
   const [rejectModal, setRejectModal] = useState(null); 
   const [rejectReasonText, setRejectReasonText] = useState("");
@@ -179,9 +179,8 @@ export default function App() {
   const [redeemSuccess, setRedeemSuccess] = useState(null);
 
   const [showNotifications, setShowNotifications] = useState(false); 
-  const [selectedNotification, setSelectedNotification] = useState(null); // للرسالة المنبثقة في وسط الشاشة
+  const [selectedNotification, setSelectedNotification] = useState(null); 
   
-  // 🌟 حالة التنبيهات المقروءة لإنقاص الرقم الذكي 🌟
   const [readNotifs, setReadNotifs] = useState(() => {
       const saved = localStorage.getItem('sh_read_notifs');
       return saved ? JSON.parse(saved) : [];
@@ -194,7 +193,14 @@ export default function App() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 6000);
   };
 
-  // 🌟 نظام الظهور التلقائي (المنبثق) للتنبيهات الجديدة للعملاء 🌟
+  // 🌟 1. طلب إذن الإشعارات من المتصفح عند فتح التطبيق 🌟
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+        Notification.requestPermission();
+    }
+  }, []);
+
+  // 🌟 نظام الظهور التلقائي للإشعارات الجديدة والتنبيهات المباشرة 🌟
   useEffect(() => {
       if (globalAlerts && globalAlerts.length > 0 && !isUserAdmin) {
           const latest = globalAlerts[0];
@@ -211,7 +217,6 @@ export default function App() {
               seen.push(latest.id);
               localStorage.setItem('seen_alerts', JSON.stringify(seen));
               
-              // تحديد كـ مقروء حتى لا يزعجه الرقم في الجرس أيضاً بعد قراءتها المنبثقة
               setReadNotifs(prev => {
                   if (!prev.includes(latest.id)) {
                       const updated = [...prev, latest.id];
@@ -256,7 +261,7 @@ export default function App() {
            const alertsRes = await fetch(`${API_URL}/alerts`).catch(()=>null);
            if (alertsRes && alertsRes.ok) {
                const alrts = await alertsRes.json();
-               setGlobalAlerts(alrts); // حفظ التنبيهات الإدارية
+               setGlobalAlerts(alrts); 
            }
        } catch (err) {
            console.log("صعوبة في الاتصال بالسيرفر. تأكد من إعدادات الـ HTTPS/HTTP");
@@ -272,7 +277,6 @@ export default function App() {
   const notifications = useMemo(() => {
       let notifs = [];
       
-      // التنبيهات الإدارية (تظهر للجميع)
       if (globalAlerts) {
           globalAlerts.forEach(alert => {
               notifs.push({
@@ -291,10 +295,11 @@ export default function App() {
               notifs.push({
                   id: o.id,
                   title: 'طلب جديد بانتظار الموافقة',
-                  desc: `طلب ${o.serviceTitle} من ${o.name}`,
+                  desc: `طلب ${o.serviceTitle} من ${o.name}\nرقم الهاتف: ${o.phone}`,
                   time: o.createdAt,
                   type: 'order',
-                  icon: Ticket
+                  icon: Ticket,
+                  orderData: o
               });
           });
       } else {
@@ -303,10 +308,11 @@ export default function App() {
                   notifs.push({
                       id: o.id + '_update',
                       title: o.status === 'approved' ? 'مبارك! تم قبول طلبك' : 'عذراً، تم رفض الطلب',
-                      desc: `طلب: ${o.serviceTitle} ${o.status === 'rejected' && o.rejectionReason ? `- السبب: ${o.rejectionReason}` : ''}`,
+                      desc: `طلب: ${o.serviceTitle} ${o.status === 'rejected' && o.rejectionReason ? `\nالسبب: ${o.rejectionReason}` : ''}`,
                       time: o.updatedAt || o.createdAt,
                       type: o.status === 'approved' ? 'success' : 'error',
-                      icon: o.status === 'approved' ? CheckCircle2 : X
+                      icon: o.status === 'approved' ? CheckCircle2 : X,
+                      orderData: o
                   });
               });
           }
@@ -314,7 +320,7 @@ export default function App() {
               notifs.push({
                   id: e.id,
                   title: e.postType === 'offer' ? 'عرض جديد!' : 'رحلة جديدة!',
-                  desc: `${e.name} ${e.price ? `بـ ${e.price}` : ''}`,
+                  desc: `${e.name} ${e.price ? `بـ ${e.price}` : ''}\n${e.desc || ''}`,
                   time: e.createdAt,
                   type: 'info',
                   icon: Megaphone
@@ -324,9 +330,30 @@ export default function App() {
       return notifs.sort((a, b) => b.time - a.time);
   }, [allOrders, userOrders, dynamicEvents, globalAlerts, isUserAdmin, isGuest]);
 
-  // التفاعل عند الضغط على إشعار
+  // 🌟 إرسال Web Push Notification للمتصفح 🌟
+  useEffect(() => {
+      if ("Notification" in window && Notification.permission === "granted") {
+          const osNotified = JSON.parse(localStorage.getItem('sh_os_notified') || '[]');
+          let updated = false;
+
+          notifications.forEach(n => {
+              if (!osNotified.includes(n.id) && !readNotifs.includes(n.id)) {
+                  // إرسال الإشعار لسطح المكتب/الموبايل
+                  new Notification("شهبا Go | " + n.title, { 
+                      body: n.desc.replace(/\n/g, " - "), // تنظيف النص
+                  });
+                  osNotified.push(n.id);
+                  updated = true;
+              }
+          });
+
+          if (updated) {
+              localStorage.setItem('sh_os_notified', JSON.stringify(osNotified));
+          }
+      }
+  }, [notifications, readNotifs]);
+
   const handleNotificationClick = (n) => {
-      // 🌟 تعليم التنبيه كمقروء لإنقاص الرقم الأحمر 🌟
       if (!readNotifs.includes(n.id)) {
           const newRead = [...readNotifs, n.id];
           setReadNotifs(newRead);
@@ -334,9 +361,8 @@ export default function App() {
       }
 
       setShowNotifications(false);
-      setSelectedNotification(n); // إظهار النافذة المنبثقة في المنتصف
+      setSelectedNotification(n); 
 
-      // التوجيه الذكي في الخلفية حسب نوع الإشعار
       if (n.type === 'order') {
           setShowAdminPanel(true);
           setAdminTab('orders');
@@ -351,7 +377,6 @@ export default function App() {
       }
   };
 
-  // 🌟 نظام إرسال رمز التحقق الديناميكي 🌟
   const handleAction = async (e) => {
       e.preventDefault();
       
@@ -608,7 +633,6 @@ export default function App() {
       return filtered;
   };
 
-  // 🌟 تعديل رقم الواتساب المخصص لقسم الطيران 🌟
   const openWhatsApp = () => window.open("https://wa.me/963952490049", "_blank");
 
   const StatusBadge = ({ status }) => {
@@ -621,7 +645,6 @@ export default function App() {
     return <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border ${styles[status]}`}>{labels[status]}</span>;
   };
 
-  // 🌟 حساب عدد التنبيهات غير المقروءة 🌟
   const unreadCount = notifications.filter(n => !readNotifs.includes(n.id)).length;
 
   const ToastContainer = () => (
@@ -656,7 +679,6 @@ export default function App() {
         </div>
         <h1 className="text-5xl font-black text-white italic tracking-tighter text-center leading-none uppercase mb-1 drop-shadow-lg">شهبا <span className="text-emerald-400">Go</span></h1>
         
-        {/* التوقيع الاحترافي 1 - شاشة البداية */}
         <div className="flex items-center gap-3 mb-6 opacity-80">
             <div className="h-px w-8 bg-gradient-to-l from-emerald-500 to-transparent"></div>
             <span className="text-[11px] text-white tracking-[0.3em] font-light uppercase">Hammash & Tatari</span>
@@ -707,8 +729,6 @@ export default function App() {
            <HTLogo />
            <div className="flex flex-col text-right">
                 <h1 className="text-lg font-black italic text-white leading-none mb-1">شهبا <span className="text-emerald-400">Go</span></h1>
-                
-                {/* التوقيع الاحترافي 2 - الهيدر */}
                 <span className="text-[7px] text-emerald-400/80 font-bold uppercase tracking-[0.15em] bg-emerald-500/10 px-1.5 py-0.5 rounded inline-block w-fit">
                     Hammash & Tatari
                 </span>
@@ -727,7 +747,6 @@ export default function App() {
                     )}
                 </button>
                 
-                {/* قائمة التنبيهات المنسدلة */}
                 {showNotifications && (
                     <>
                         <div className="fixed inset-0 z-[8900]" onClick={() => setShowNotifications(false)}></div>
@@ -747,7 +766,6 @@ export default function App() {
                                        ? 'bg-white/5 border-white/5 opacity-60 hover:opacity-100' 
                                        : 'bg-[#1e293b] border-white/10 hover:bg-white/20 shadow-md'
                                    }`}>
-                                      {/* نقطة الإشعار غير المقروء */}
                                       {!readNotifs.includes(n.id) && (
                                           <div className="absolute top-3 left-3 w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
                                       )}
@@ -761,8 +779,9 @@ export default function App() {
                                           <n.icon size={14} />
                                       </div>
                                       <div className="flex-1 z-10">
+                                          {/* 🌟 حل مشكلة اقتطاع النص 🌟 */}
                                           <h4 className={`text-[11px] font-black ${n.type === 'special' && !readNotifs.includes(n.id) ? 'text-amber-400' : 'text-white'}`}>{n.title}</h4>
-                                          <p className="text-[9px] text-white/60 mt-0.5 truncate">{n.desc}</p>
+                                          <p className="text-[9px] text-white/60 mt-0.5 whitespace-pre-wrap leading-relaxed">{n.desc}</p>
                                           <span className="text-[8px] text-white/30 mt-1.5 block">{formatDateTime(n.time)}</span>
                                       </div>
                                    </div>
@@ -773,7 +792,6 @@ export default function App() {
                 )}
             </div>
 
-            {/* زر المحفظة للزبائن (يختفي إذا كان أدمن داخل لوحة الإدارة) */}
             {(!isUserAdmin || !showAdminPanel) && (
                 <button onClick={() => {setActiveView('wallet'); setSelectedCategory(null);}} className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 rounded-xl text-emerald-400 hover:bg-emerald-500/30 transition-colors">
                     <Gift size={14}/>
@@ -781,7 +799,6 @@ export default function App() {
                 </button>
             )}
             
-            {/* زر الإدارة (يظهر بوضوح دائماً للأدمن بجانب تسجيل الخروج) */}
             {isUserAdmin && (
                 <button onClick={() => setShowAdminPanel(!showAdminPanel)} className={`px-4 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border transition-all ${showAdminPanel ? 'bg-amber-500/10 text-amber-400 border-amber-500/50' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'}`}>
                    {showAdminPanel ? <LayoutGrid size={14} /> : <Settings size={14}/>}
@@ -789,7 +806,6 @@ export default function App() {
                 </button>
             )}
 
-            {/* الدخول / الخروج */}
             {isGuest ? (
                 <button onClick={() => setAuthModal('login')} className="px-3 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border border-white/10 bg-white/5 text-slate-300 hover:text-white transition-colors">
                     <LogIn size={14} /> دخول
@@ -816,7 +832,101 @@ export default function App() {
                     <selectedNotification.icon size={36} className="animate-pulse" />
                 </div>
                 <h3 className={`text-xl font-black mb-3 ${selectedNotification.type === 'special' ? 'text-amber-400 drop-shadow-md' : 'text-white'}`}>{selectedNotification.title}</h3>
-                <p className="text-sm text-white/90 mb-8 font-bold leading-relaxed">{selectedNotification.desc}</p>
+                
+                {/* إخفاء الوصف العادي إذا كان هناك بيانات طلب لكي لا يتكرر النص */}
+                {!selectedNotification.orderData && (
+                    <p className="text-sm text-white/90 mb-4 font-bold leading-relaxed whitespace-pre-wrap">{selectedNotification.desc}</p>
+                )}
+                
+                {/* 🌟 1. تصميم تذكرة الحجز عند الموافقة (للعميل) 🌟 */}
+                {selectedNotification.orderData && selectedNotification.type === 'success' && (
+                    <div className="bg-gradient-to-br from-emerald-900/40 to-[#112240] border border-emerald-500/30 rounded-3xl p-5 mb-6 text-right shadow-lg relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 blur-2xl rounded-full pointer-events-none"></div>
+                        
+                        <div className="flex justify-between items-center mb-4 border-b border-emerald-500/20 pb-3 relative z-10">
+                            <h4 className="text-emerald-400 font-black text-sm flex items-center gap-2">
+                                <Ticket size={18}/> تذكرة الحجز
+                            </h4>
+                            <div className="bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-lg text-[9px] font-black border border-emerald-500/30">مقبول</div>
+                        </div>
+                        
+                        <div className="space-y-3 relative z-10">
+                            <div>
+                                <span className="text-white/40 text-[10px] block mb-1 font-bold">الخدمة المطلوبة</span>
+                                <span className="font-black text-white text-xs bg-black/20 p-2 rounded-xl block border border-white/5">{selectedNotification.orderData.serviceTitle}</span>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <span className="text-white/40 text-[10px] block mb-1 font-bold">الاسم</span>
+                                    <span className="font-bold text-white text-[11px] truncate block">{selectedNotification.orderData.name}</span>
+                                </div>
+                                <div>
+                                    <span className="text-white/40 text-[10px] block mb-1 font-bold">تاريخ الطلب</span>
+                                    <span className="font-bold text-white text-[11px] block">{formatDateTime(selectedNotification.orderData.createdAt)}</span>
+                                </div>
+                            </div>
+
+                            <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 flex gap-2 items-start mt-2">
+                                <Info size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                                <p className="text-[10px] text-emerald-400/90 font-bold leading-relaxed">
+                                    يرجى زيارة مركزنا أو التواصل عبر الواتساب لتأكيد الحجز النهائي واستكمال الإجراءات. شكراً لثقتك بـ HT!
+                                </p>
+                            </div>
+                            
+                            <button onClick={openWhatsApp} className="w-full mt-2 bg-emerald-500 text-black py-3 rounded-xl font-black text-xs flex items-center justify-center gap-2 hover:scale-105 transition-transform shadow-lg shadow-emerald-500/20">
+                                <MessageCircle size={16}/> تواصل معنا الآن
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* 🌟 2. تفاصيل الطلب عند الرفض (للعميل) 🌟 */}
+                {selectedNotification.orderData && selectedNotification.type === 'error' && (
+                    <div className="bg-rose-500/10 border border-rose-500/30 rounded-3xl p-5 mb-6 text-right shadow-lg relative overflow-hidden">
+                        <h4 className="text-rose-400 font-black text-sm mb-3 flex items-center gap-2 border-b border-rose-500/20 pb-3">
+                            <AlertCircle size={18}/> تفاصيل الرفض
+                        </h4>
+                        <div className="space-y-3 relative z-10">
+                            <div>
+                                <span className="text-white/40 text-[10px] block mb-1 font-bold">الخدمة المطلوبة</span>
+                                <span className="font-bold text-white text-[11px] block">{selectedNotification.orderData.serviceTitle}</span>
+                            </div>
+                            {selectedNotification.orderData.rejectionReason && (
+                               <div className="bg-rose-500/20 p-3 rounded-xl border border-rose-500/30 mt-2">
+                                  <span className="text-rose-300 text-[10px] font-black block mb-1">السبب والتعليمات:</span>
+                                  <span className="text-white text-xs leading-relaxed font-bold">{selectedNotification.orderData.rejectionReason}</span>
+                               </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* 🌟 3. تفاصيل الطلب الوارد (للإدارة) 🌟 */}
+                {selectedNotification.orderData && selectedNotification.type === 'order' && (
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-5 mb-6 text-right shadow-lg relative overflow-hidden">
+                        <h4 className="text-amber-400 font-black text-sm mb-3 flex items-center gap-2 border-b border-amber-500/20 pb-3">
+                            <Ticket size={18}/> طلب حجز جديد
+                        </h4>
+                        <div className="space-y-3 relative z-10">
+                            <div>
+                                <span className="text-white/40 text-[10px] block mb-1 font-bold">الخدمة المطلوبة</span>
+                                <span className="font-bold text-white text-xs block">{selectedNotification.orderData.serviceTitle}</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 mt-2">
+                                <div>
+                                    <span className="text-white/40 text-[10px] block mb-1 font-bold">العميل</span>
+                                    <span className="font-bold text-white text-[11px] block">{selectedNotification.orderData.name}</span>
+                                </div>
+                                <div>
+                                    <span className="text-white/40 text-[10px] block mb-1 font-bold">رقم الهاتف</span>
+                                    <span className="font-bold text-amber-400 text-[11px] block" dir="ltr">{selectedNotification.orderData.phone}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <p className="text-[10px] text-white/30 mb-6">{formatDateTime(selectedNotification.time)}</p>
                 <button onClick={() => setSelectedNotification(null)} className={`w-full py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all ${
                     selectedNotification.type === 'error' ? 'bg-rose-500 text-white' :
@@ -825,7 +935,7 @@ export default function App() {
                     selectedNotification.type === 'special' ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-black shadow-yellow-500/30' :
                     'bg-blue-500 text-white'
                 }`}>
-                    حسناً، فهمت
+                    إغلاق
                 </button>
              </div>
           </div>
@@ -870,7 +980,6 @@ export default function App() {
 
               {authError && <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-3 rounded-xl text-xs font-bold mb-4">{authError}</div>}
               
-              {/* 🌟 تعديل فورم التسجيل ليتوافق مع نظام رمز التحقق (OTP) للإيميل والهاتف 🌟 */}
               <form onSubmit={handleAction} className="space-y-4">
                   {authTab === 'email' ? (
                      <>
@@ -1341,12 +1450,32 @@ export default function App() {
                                <td className="p-4">
                                   <div className="font-black text-emerald-400">{order.serviceTitle}</div>
                                   <div className="text-[9px] text-white/40 mt-1 font-bold">{formatDateTime(order.createdAt)}</div>
-                                  {order.status === 'rejected' && <div className="text-[9px] text-rose-400 mt-2 font-bold bg-rose-500/10 inline-block px-2 py-1 rounded-md">سبب الرفض: {order.rejectionReason || 'لم يذكر'}</div>}
+                                  
+                                  {/* 🌟 تعديل حالة الرفض: إظهار السبب وإضافة زر التعديل 🌟 */}
+                                  {order.status === 'rejected' && (
+                                      <div className="flex flex-col gap-2 mt-3 animate-in fade-in">
+                                          <div className="text-[9px] text-rose-400 font-bold bg-rose-500/10 px-2 py-1.5 rounded-lg inline-block border border-rose-500/20">
+                                              <span className="font-black">سبب الرفض:</span> {order.rejectionReason || 'عذراً، يرجى مراجعة بيانات الطلب'}
+                                          </div>
+                                          <button 
+                                              onClick={() => {
+                                                  // تعيين القسم المناسب للطلب لإعادة فتحه
+                                                  setSelectedCategory(order.serviceType);
+                                                  if (order.busSubCategory) setSelectedBusType(order.busSubCategory);
+                                                  // إرسال بيانات الطلب القديم ليقوم بتعديلها
+                                                  setBookingItem({ ...order, isEditMode: true });
+                                              }}
+                                              className="flex items-center justify-center gap-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-white/80 py-2 rounded-xl text-[9px] font-bold w-fit px-4 transition-colors"
+                                          >
+                                              <RotateCcw size={12}/> تعديل وإعادة الطلب
+                                          </button>
+                                      </div>
+                                  )}
                                </td>
-                               <td className="p-4"><StatusBadge status={order.status} /></td>
+                               <td className="p-4 align-top pt-5"><StatusBadge status={order.status} /></td>
                             </tr>
                           ))}
-                          {userOrders.length === 0 && <tr><td colSpan="2" className="p-8 text-center text-white/20">لا يوجد طلبات</td></tr>}
+                          {userOrders.length === 0 && <tr><td colSpan="2" className="p-8 text-center text-white/20 font-bold">لا يوجد طلبات حالياً</td></tr>}
                        </tbody>
                     </table>
                  </div>
@@ -1367,7 +1496,6 @@ export default function App() {
                  <p className="text-[10px] text-emerald-400 font-bold mt-1 uppercase tracking-widest">{bookingItem.name || bookingItem.title || bookingItem.serviceTitle}</p>
               </div>
 
-              {/* 🌟 تفاصيل الفعالية (تظهر فقط عند حجز الفعاليات والرحلات) 🌟 */}
               {selectedCategory === 'events' && bookingItem?.desc && (
                   <div className="bg-[#0B192C] border border-emerald-500/20 p-4 rounded-2xl mb-6 text-right shadow-inner">
                       <h4 className="text-xs font-black text-emerald-400 mb-2 flex items-center gap-1.5">
