@@ -193,14 +193,12 @@ export default function App() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 6000);
   };
 
-  // 🌟 1. طلب إذن الإشعارات من المتصفح عند فتح التطبيق 🌟
   useEffect(() => {
     if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
         Notification.requestPermission();
     }
   }, []);
 
-  // 🌟 نظام الظهور التلقائي للإشعارات الجديدة والتنبيهات المباشرة 🌟
   useEffect(() => {
       if (globalAlerts && globalAlerts.length > 0 && !isUserAdmin) {
           const latest = globalAlerts[0];
@@ -238,7 +236,6 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // جلب البيانات من السيرفر الحقيقي
   useEffect(() => {
     if (!user) return; 
 
@@ -273,7 +270,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [user]);
 
-  // حساب التنبيهات ديناميكياً
   const notifications = useMemo(() => {
       let notifs = [];
       
@@ -330,7 +326,6 @@ export default function App() {
       return notifs.sort((a, b) => b.time - a.time);
   }, [allOrders, userOrders, dynamicEvents, globalAlerts, isUserAdmin, isGuest]);
 
-  // 🌟 إرسال Web Push Notification للمتصفح 🌟
   useEffect(() => {
       if ("Notification" in window && Notification.permission === "granted") {
           const osNotified = JSON.parse(localStorage.getItem('sh_os_notified') || '[]');
@@ -338,9 +333,8 @@ export default function App() {
 
           notifications.forEach(n => {
               if (!osNotified.includes(n.id) && !readNotifs.includes(n.id)) {
-                  // إرسال الإشعار لسطح المكتب/الموبايل
                   new Notification("شهبا Go | " + n.title, { 
-                      body: n.desc.replace(/\n/g, " - "), // تنظيف النص
+                      body: n.desc.replace(/\n/g, " - "), 
                   });
                   osNotified.push(n.id);
                   updated = true;
@@ -779,7 +773,6 @@ export default function App() {
                                           <n.icon size={14} />
                                       </div>
                                       <div className="flex-1 z-10">
-                                          {/* 🌟 حل مشكلة اقتطاع النص 🌟 */}
                                           <h4 className={`text-[11px] font-black ${n.type === 'special' && !readNotifs.includes(n.id) ? 'text-amber-400' : 'text-white'}`}>{n.title}</h4>
                                           <p className="text-[9px] text-white/60 mt-0.5 whitespace-pre-wrap leading-relaxed">{n.desc}</p>
                                           <span className="text-[8px] text-white/30 mt-1.5 block">{formatDateTime(n.time)}</span>
@@ -833,12 +826,10 @@ export default function App() {
                 </div>
                 <h3 className={`text-xl font-black mb-3 ${selectedNotification.type === 'special' ? 'text-amber-400 drop-shadow-md' : 'text-white'}`}>{selectedNotification.title}</h3>
                 
-                {/* إخفاء الوصف العادي إذا كان هناك بيانات طلب لكي لا يتكرر النص */}
                 {!selectedNotification.orderData && (
                     <p className="text-sm text-white/90 mb-4 font-bold leading-relaxed whitespace-pre-wrap">{selectedNotification.desc}</p>
                 )}
                 
-                {/* 🌟 1. تصميم تذكرة الحجز عند الموافقة (للعميل) 🌟 */}
                 {selectedNotification.orderData && selectedNotification.type === 'success' && (
                     <div className="bg-gradient-to-br from-emerald-900/40 to-[#112240] border border-emerald-500/30 rounded-3xl p-5 mb-6 text-right shadow-lg relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 blur-2xl rounded-full pointer-events-none"></div>
@@ -881,7 +872,6 @@ export default function App() {
                     </div>
                 )}
 
-                {/* 🌟 2. تفاصيل الطلب عند الرفض (للعميل) 🌟 */}
                 {selectedNotification.orderData && selectedNotification.type === 'error' && (
                     <div className="bg-rose-500/10 border border-rose-500/30 rounded-3xl p-5 mb-6 text-right shadow-lg relative overflow-hidden">
                         <h4 className="text-rose-400 font-black text-sm mb-3 flex items-center gap-2 border-b border-rose-500/20 pb-3">
@@ -902,7 +892,6 @@ export default function App() {
                     </div>
                 )}
 
-                {/* 🌟 3. تفاصيل الطلب الوارد (للإدارة) 🌟 */}
                 {selectedNotification.orderData && selectedNotification.type === 'order' && (
                     <div className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-5 mb-6 text-right shadow-lg relative overflow-hidden">
                         <h4 className="text-amber-400 font-black text-sm mb-3 flex items-center gap-2 border-b border-amber-500/20 pb-3">
@@ -1274,13 +1263,31 @@ export default function App() {
                   <div className="space-y-4 pb-10">
                     {/* FLIGHTS */}
                     {selectedCategory === 'flights' && (
-                        <div className="bg-[#112240] p-8 rounded-[3rem] text-center shadow-xl border border-white/5">
-                            <Plane size={48} className="mx-auto text-cyan-400 mb-4 animate-bounce" />
-                            <h3 className="font-black text-lg">حجز طيران</h3>
-                            <p className="text-xs text-white/50 px-4 mt-2 mb-6 leading-relaxed">حدد وجهتك وسنقوم بتزويدك بأفضل الرحلات المتوفرة.</p>
-                            <button onClick={openWhatsApp} className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 py-4 rounded-2xl font-black text-xs flex items-center justify-center gap-2 hover:bg-emerald-500 hover:text-black transition-all mt-3">
-                                <MessageCircle size={18}/> اتصل بنا للحجز
-                            </button>
+                        <div className="space-y-4 animate-in fade-in">
+                            <div className="relative bg-[#112240] w-full h-[450px] rounded-[3rem] overflow-hidden shadow-2xl border border-cyan-500/20 group">
+                                {/* 🌟 الصورة التي تم رفعها (يرجى حفظها في مجلد public باسم flight-bg.jpg) 🌟 */}
+                                <img src="/flight-bg.jpg" alt="حجز طيران" className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-700" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/80 to-transparent"></div>
+                                
+                                <div className="absolute inset-0 flex flex-col items-center justify-end p-6 text-center z-10 pb-10">
+                                    <div className="w-16 h-16 bg-cyan-500/20 backdrop-blur-md rounded-3xl flex items-center justify-center mb-4 border border-cyan-500/30 shadow-inner">
+                                        <Plane size={32} className="text-cyan-400 animate-bounce" />
+                                    </div>
+                                    <h3 className="font-black text-2xl text-white mb-3 drop-shadow-md">حجز طيران</h3>
+                                    
+                                    {/* النص التسويقي المأخوذ من الصورة */}
+                                    <div className="bg-black/40 backdrop-blur-sm border border-white/10 p-4 rounded-2xl mb-6 shadow-lg">
+                                        <p className="text-sm text-cyan-300 leading-relaxed font-black drop-shadow-md">
+                                            احجز تذكرتك معنا<br/>وخلي توصيلتك
+                                        </p>
+                                        <p className="text-xs text-white font-bold mt-1">من أو إلى مطار حلب <span className="bg-amber-500 text-black px-2 py-0.5 rounded-md mx-1">مجاناً</span></p>
+                                    </div>
+
+                                    <button onClick={openWhatsApp} className="w-full bg-cyan-600 text-white py-4 rounded-full font-black text-sm shadow-[0_8px_30px_rgba(6,182,212,0.4)] active:scale-95 transition-all flex items-center justify-center gap-3 border border-cyan-400">
+                                        <MessageCircle size={18}/> تواصل معنا للحجز
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     )}
 
