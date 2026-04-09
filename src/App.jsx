@@ -199,18 +199,15 @@ export default function App() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 6000);
   };
 
-  // 🌟 تفعيل الإشعارات وتجهيز بيئة Service Worker 🌟
   useEffect(() => {
     if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
         Notification.requestPermission();
     }
-    // تهيئة Service Worker
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW Registration failed', err));
     }
   }, []);
 
-  // 🌟 نظام الظهور التلقائي للإشعارات الجديدة 🌟
   useEffect(() => {
       if (globalAlerts && globalAlerts.length > 0 && !isUserAdmin) {
           const latest = globalAlerts[0];
@@ -248,7 +245,6 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // جلب البيانات من السيرفر
   useEffect(() => {
     if (!user) return; 
 
@@ -384,13 +380,11 @@ export default function App() {
       }
   };
 
-  // 🌟 نظام المصادقة المحسن (إنشاء وتسجيل الدخول المربوط بقاعدة بيانات محلية) 🌟
   const handleAction = async (e) => {
       e.preventDefault();
       setAuthError('');
       const dbUsers = JSON.parse(localStorage.getItem('sh_db_users') || '[]');
       
-      // عملية إرسال الرمز (OTP)
       if ((authModal === 'signup' || (authModal === 'login' && authTab === 'phone')) && !otpSent) {
           setAuthLoading(true);
           try {
@@ -419,10 +413,9 @@ export default function App() {
           return;
       }
       
-      // عملية تأكيد الرمز وإنشاء حساب جديد
       if (authModal === 'signup' && otpSent) {
           if(otpCode !== '123456' && otpCode.length > 0) { 
-              // في النظام الحقيقي، يتم هنا إرسال الرمز للسيرفر للتحقق
+              // التحقق من الرمز
           }
           const exists = dbUsers.find(u => (authTab === 'email' && u.email === authEmail) || (authTab === 'phone' && u.phone === authPhone));
           if (exists) {
@@ -445,7 +438,6 @@ export default function App() {
           return;
       }
       
-      // عملية تسجيل الدخول
       if (authModal === 'login') {
           const accountFound = dbUsers.find(u => 
               (authTab === 'email' && u.email === authEmail && u.password === authPassword) || 
@@ -508,7 +500,6 @@ export default function App() {
     const formData = new FormData(e.target);
     const formValues = Object.fromEntries(formData.entries());
 
-    // 🌟 التحقق من صحة رقم الهاتف (10 أرقام) 🌟
     const phoneStr = formValues.phone.trim();
     if (!/^\d{10}$/.test(phoneStr)) {
         setPhoneError("يرجى إدخال رقم هاتف صحيح مكون من 10 أرقام (مثال: 0912345678)");
@@ -746,7 +737,6 @@ export default function App() {
     );
   }
 
-  // 🌟 4. قالب الفاتورة المطبوعة (PDF Voucher) 🌟
   if (printingOrder) {
       return (
           <div className="min-h-screen bg-white text-black p-8 font-sans" dir="rtl">
@@ -1416,11 +1406,11 @@ export default function App() {
                             <div className="relative bg-[#112240] w-full h-[450px] rounded-[3rem] overflow-hidden shadow-2xl border border-indigo-500/20 group">
                                 <img 
                                     src="/transit-bg.jpg" 
-                                    onError={(e) => { e.target.onerror = null; e.target.src='https://images.unsplash.com/photo-1494976388531-d1058494cdd8?q=80&w=800'; }} 
+                                    onError={(e) => { e.target.onerror = null; e.target.src='https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=800'; }} 
                                     alt="النقل البري" 
-                                    className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-700" 
+                                    className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-700" 
                                 />
-                                <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/80 to-transparent"></div>
+                                <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/50 to-transparent"></div>
                                 
                                 <div className="absolute inset-0 flex flex-col items-center justify-end p-6 text-center z-10 pb-10">
                                     <div className="w-16 h-16 bg-indigo-500/20 backdrop-blur-md rounded-3xl flex items-center justify-center mb-4 border border-indigo-500/30 shadow-inner">
