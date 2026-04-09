@@ -154,6 +154,15 @@ export default function App() {
     }).format(new Date(timestamp));
   };
 
+  // 🌟 استخراج تاريخ اليوم بصيغة YYYY-MM-DD لتقييد تواريخ الحجز 🌟
+  const getTodayDateString = () => {
+    const d = new Date();
+    const month = `${d.getMonth() + 1}`.padStart(2, '0');
+    const day = `${d.getDate()}`.padStart(2, '0');
+    return `${d.getFullYear()}-${month}-${day}`;
+  };
+  const todayDate = getTodayDateString();
+
   const [authModal, setAuthModal] = useState(null); 
   const [authTab, setAuthTab] = useState('email'); 
   const [authEmail, setAuthEmail] = useState('');
@@ -1716,7 +1725,8 @@ export default function App() {
                          </div>
                          <div className="space-y-1 text-right">
                             <label className="text-[9px] text-amber-500/50 mr-2 font-bold">تاريخ البدء</label>
-                            <input name="checkIn" type="date" required defaultValue={bookingItem?.checkIn || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-amber-500" />
+                            {/* تم إضافة min لمنع تواريخ الماضي */}
+                            <input name="checkIn" type="date" min={todayDate} required defaultValue={bookingItem?.checkIn || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-amber-500" />
                          </div>
                       </div>
 
@@ -1760,7 +1770,8 @@ export default function App() {
                       </div>
                       <div className="space-y-1">
                          <label className="text-[9px] text-cyan-500/50 mr-2">تاريخ الرحلة</label>
-                         <input name="flightDate" type="date" required defaultValue={bookingItem?.flightDate || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-cyan-500" />
+                         {/* تم إضافة min لمنع تواريخ الماضي */}
+                         <input name="flightDate" type="date" min={todayDate} required defaultValue={bookingItem?.flightDate || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-cyan-500" />
                       </div>
                    </div>
                  )}
@@ -1786,7 +1797,8 @@ export default function App() {
                       <div className="grid grid-cols-2 gap-3">
                          <div className="space-y-1">
                             <label className="text-[9px] text-indigo-500/50 mr-2">تاريخ الرحلة</label>
-                            <input name="tripDate" type="date" required defaultValue={bookingItem?.tripDate || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-indigo-500" />
+                            {/* تم إضافة min لمنع تواريخ الماضي */}
+                            <input name="tripDate" type="date" min={todayDate} required defaultValue={bookingItem?.tripDate || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-indigo-500" />
                          </div>
                          <div className="space-y-1">
                             <label className="text-[9px] text-indigo-500/50 mr-2">توقيت الرحلة</label>
@@ -1858,7 +1870,8 @@ export default function App() {
                       <div className="grid grid-cols-2 gap-3">
                          <div className="space-y-1">
                            <label className="text-[9px] text-white/30 mr-2">تاريخ الرحلة</label>
-                           <input name="tripDate" type="date" required defaultValue={bookingItem?.tripDate || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-emerald-500" />
+                           {/* تم إضافة min لمنع تواريخ الماضي */}
+                           <input name="tripDate" type="date" min={todayDate} required defaultValue={bookingItem?.tripDate || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-emerald-500" />
                          </div>
                          <div className="space-y-1">
                            <label className="text-[9px] text-white/30 mr-2">وقت الانطلاق</label>
@@ -1905,7 +1918,8 @@ export default function App() {
                            </div>
                            <div className="space-y-1 text-right">
                                <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">تاريخ البدء</label>
-                               <input name="startDate" type="date" required defaultValue={bookingItem?.startDate || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-emerald-500" />
+                               {/* تم إضافة min لمنع تواريخ الماضي */}
+                               <input name="startDate" type="date" min={todayDate} required defaultValue={bookingItem?.startDate || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-emerald-500" />
                            </div>
                         </div>
                     </div>
