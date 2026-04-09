@@ -1413,19 +1413,29 @@ export default function App() {
 
                     {selectedCategory === 'transit' && (
                         <div className="space-y-4 animate-in fade-in">
-                            <div className="relative bg-[#112240] w-full h-[400px] rounded-[3rem] overflow-hidden shadow-2xl border border-indigo-500/20 group">
-                                <img src="/transit-bg.jpg" onError={(e) => e.target.src='https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=800'} alt="النقل البري" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity duration-700" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/60 to-transparent"></div>
+                            <div className="relative bg-[#112240] w-full h-[450px] rounded-[3rem] overflow-hidden shadow-2xl border border-indigo-500/20 group">
+                                <img 
+                                    src="/transit-bg.jpg" 
+                                    onError={(e) => { e.target.onerror = null; e.target.src='https://images.unsplash.com/photo-1494976388531-d1058494cdd8?q=80&w=800'; }} 
+                                    alt="النقل البري" 
+                                    className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-700" 
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/80 to-transparent"></div>
                                 
-                                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
-                                    <div className="w-20 h-20 bg-indigo-500/20 backdrop-blur-md rounded-3xl flex items-center justify-center mb-6 border border-indigo-500/30 shadow-inner">
-                                        <CarFront size={40} className="text-indigo-400 animate-pulse" />
+                                <div className="absolute inset-0 flex flex-col items-center justify-end p-6 text-center z-10 pb-10">
+                                    <div className="w-16 h-16 bg-indigo-500/20 backdrop-blur-md rounded-3xl flex items-center justify-center mb-4 border border-indigo-500/30 shadow-inner">
+                                        <CarFront size={32} className="text-indigo-400 animate-pulse" />
                                     </div>
                                     <h3 className="font-black text-2xl text-white mb-3 drop-shadow-md">من البيت إلى البيت</h3>
-                                    <p className="text-xs text-indigo-100/90 leading-relaxed mb-8 max-w-[250px] font-bold drop-shadow-md">
-                                        نقل آمن ومريح بين المحافظات وبيروت بسيارات VIP عادية أو سيارات جيب عائلية.
-                                    </p>
-                                    <button onClick={() => setBookingItem({title: 'طلب خدمة النقل البري'})} className="bg-indigo-600 text-white px-8 py-4 rounded-full font-black text-sm shadow-[0_8px_30px_rgba(79,70,229,0.4)] active:scale-95 transition-all flex items-center gap-3 border border-indigo-400">
+                                    
+                                    <div className="bg-black/40 backdrop-blur-sm border border-white/10 p-4 rounded-2xl mb-6 shadow-lg max-w-xs">
+                                        <p className="text-xs text-indigo-300 leading-relaxed font-black drop-shadow-md">
+                                            نقل آمن ومريح بين المحافظات وبيروت
+                                        </p>
+                                        <p className="text-[11px] text-white font-bold mt-2">بسيارات <span className="bg-indigo-500 text-white px-2 py-0.5 rounded-md mx-1">VIP</span> عادية أو عائلية</p>
+                                    </div>
+
+                                    <button onClick={() => setBookingItem({title: 'طلب خدمة النقل البري'})} className="w-full bg-indigo-600 text-white py-4 rounded-full font-black text-sm shadow-[0_8px_30px_rgba(79,70,229,0.4)] active:scale-95 transition-all flex items-center justify-center gap-3 border border-indigo-400">
                                         الدخول للحجز <ChevronLeft size={18} />
                                     </button>
                                 </div>
@@ -1435,7 +1445,7 @@ export default function App() {
 
                     {selectedCategory === 'services' && (
                         <div className="relative bg-[#112240] w-full h-[200px] rounded-[3rem] overflow-hidden shadow-xl border border-slate-500/20 mb-6 group animate-in fade-in">
-                            <img src="/services-bg.jpg" onError={(e) => e.target.src='https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?q=80&w=800'} alt="خدمات" className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity duration-700" />
+                            <img src="/services-bg.jpg" onError={(e) => { e.target.onerror = null; e.target.src='https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?q=80&w=800'; }} alt="خدمات" className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity duration-700" />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/60 to-transparent"></div>
                             <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
                                 <FileCheck size={32} className="text-slate-400 mb-3 animate-pulse" />
@@ -1462,7 +1472,7 @@ export default function App() {
 
                     {selectedCategory === 'car' && (
                         <div className="relative bg-[#112240] w-full h-[200px] rounded-[3rem] overflow-hidden shadow-xl border border-emerald-500/20 mb-6 group animate-in fade-in">
-                            <img src="/car-bg.jpg" onError={(e) => e.target.src='https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?q=80&w=800'} alt="سيارات" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity duration-700" />
+                            <img src="/car-bg.jpg" onError={(e) => { e.target.onerror = null; e.target.src='https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?q=80&w=800'; }} alt="سيارات" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity duration-700" />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/60 to-transparent"></div>
                             <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
                                 <Car size={32} className="text-emerald-400 mb-3 animate-pulse" />
@@ -1494,7 +1504,7 @@ export default function App() {
 
                     {selectedCategory === 'bus' && !selectedBusType && (
                         <div className="relative bg-[#112240] w-full h-[200px] rounded-[3rem] overflow-hidden shadow-xl border border-blue-500/20 mb-6 group animate-in fade-in">
-                            <img src="/bus-bg.jpg" onError={(e) => e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=800'} alt="باصات" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity duration-700" />
+                            <img src="/bus-bg.jpg" onError={(e) => { e.target.onerror = null; e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=800'; }} alt="باصات" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity duration-700" />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/60 to-transparent"></div>
                             <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
                                 <Bus size={32} className="text-blue-400 mb-3 animate-bounce" />
@@ -1524,7 +1534,7 @@ export default function App() {
 
                     {selectedCategory === 'hotel' && !selectedCity && (
                         <div className="relative bg-[#112240] w-full h-[200px] rounded-[3rem] overflow-hidden shadow-xl border border-amber-500/20 mb-6 group animate-in fade-in">
-                            <img src="/hotel-bg.jpg" onError={(e) => e.target.src='https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=800'} alt="فنادق" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity duration-700" />
+                            <img src="/hotel-bg.jpg" onError={(e) => { e.target.onerror = null; e.target.src='https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=800'; }} alt="فنادق" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity duration-700" />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/60 to-transparent"></div>
                             <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
                                 <Hotel size={32} className="text-amber-400 mb-3 animate-pulse" />
@@ -1592,7 +1602,7 @@ export default function App() {
 
                     {selectedCategory === 'events' && (
                         <div className="relative bg-[#112240] w-full h-[200px] rounded-[3rem] overflow-hidden shadow-xl border border-rose-500/20 mb-6 group animate-in fade-in">
-                            <img src="/events-bg.jpg" onError={(e) => e.target.src='https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=800'} alt="فعاليات" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity duration-700" />
+                            <img src="/events-bg.jpg" onError={(e) => { e.target.onerror = null; e.target.src='https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=800'; }} alt="فعاليات" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity duration-700" />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/60 to-transparent"></div>
                             <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
                                 <PartyPopper size={32} className="text-rose-400 mb-3 animate-bounce" />
