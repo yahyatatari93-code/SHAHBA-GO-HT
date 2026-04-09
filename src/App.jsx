@@ -1316,16 +1316,11 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                    {CATEGORIES.map(cat => (
                      <button key={cat.id} disabled={!cat.active} onClick={() => {
-                         if (cat.id === 'transit') {
-                             setSelectedCategory('transit');
-                             setBookingItem({ title: 'طلب خدمة النقل البري' });
-                         } else {
-                             setSelectedCategory(cat.id); 
-                             setActiveView('list'); 
-                             setSelectedHotel(null); 
-                             setSelectedCity(null); 
-                             setSelectedBusType(null);
-                         }
+                         setSelectedCategory(cat.id); 
+                         setActiveView('list'); 
+                         setSelectedHotel(null); 
+                         setSelectedCity(null); 
+                         setSelectedBusType(null);
                      }} 
                        className={`p-5 rounded-[2.5rem] flex flex-col items-center justify-center text-center gap-3 border transition-all ${cat.active ? 'bg-white/5 border-white/10 shadow-lg hover:bg-white/10 active:scale-95' : 'opacity-40 grayscale'}`}>
                         <div className={`w-14 h-14 bg-gradient-to-br ${cat.color} rounded-2xl flex items-center justify-center text-white shadow-md`}><cat.icon size={26} /></div>
