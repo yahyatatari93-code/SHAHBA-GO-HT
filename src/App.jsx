@@ -180,7 +180,7 @@ export default function App() {
   const [paymentMethod, setPaymentMethod] = useState('office'); 
   const [userPoints, setUserPoints] = useState(250); 
   
-  const [phoneError, setPhoneError] = useState(''); // 🌟 لرسائل خطأ رقم الهاتف في الطلبات
+  const [phoneError, setPhoneError] = useState(''); 
 
   const [showNotifications, setShowNotifications] = useState(false); 
   const [selectedNotification, setSelectedNotification] = useState(null); 
@@ -190,7 +190,7 @@ export default function App() {
       return saved ? JSON.parse(saved) : [];
   });
 
-  const [printingOrder, setPrintingOrder] = useState(null); // 🌟 لحفظ الطلب المراد طباعته (الفاتورة)
+  const [printingOrder, setPrintingOrder] = useState(null); 
 
   const [toasts, setToasts] = useState([]);
   const addToast = (msg, type = 'info', title = '') => {
@@ -199,17 +199,18 @@ export default function App() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 6000);
   };
 
-  // 🌟 5. تفعيل الإشعارات وتجهيز بيئة Service Worker 🌟
+  // 🌟 تفعيل الإشعارات وتجهيز بيئة Service Worker 🌟
   useEffect(() => {
     if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
         Notification.requestPermission();
     }
-    // هيكل تخيلي لتهيئة Service Worker للإشعارات أثناء الإغلاق
+    // تهيئة Service Worker
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW Registration failed', err));
     }
   }, []);
 
+  // 🌟 نظام الظهور التلقائي للإشعارات الجديدة 🌟
   useEffect(() => {
       if (globalAlerts && globalAlerts.length > 0 && !isUserAdmin) {
           const latest = globalAlerts[0];
@@ -247,7 +248,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // جلب البيانات من السيرفر الحقيقي
+  // جلب البيانات من السيرفر
   useEffect(() => {
     if (!user) return; 
 
@@ -273,7 +274,7 @@ export default function App() {
                setGlobalAlerts(alrts); 
            }
        } catch (err) {
-           console.log("صعوبة في الاتصال بالسيرفر. تأكد من إعدادات الـ HTTPS/HTTP");
+           console.log("صعوبة في الاتصال بالسيرفر.");
        }
     };
 
@@ -383,48 +384,65 @@ export default function App() {
       }
   };
 
-  // 🌟 1. نظام المصادقة المحسن (إنشاء وتسجيل الدخول المربوط بقاعدة بيانات محلية) 🌟
+  // 🌟 نظام المصادقة المحسن (إنشاء وتسجيل الدخول المربوط بقاعدة بيانات محلية) 🌟
   const handleAction = async (e) => {
       e.preventDefault();
       setAuthError('');
       const dbUsers = JSON.parse(localStorage.getItem('sh_db_users') || '[]');
       
-      // عملية إنشاء حساب جديد
-      if (authModal === 'signup') {
-          if (!otpSent) {
-              setAuthLoading(true);
+      // عملية إرسال الرمز (OTP)
+      if ((authModal === 'signup' || (authModal === 'login' && authTab === 'phone')) && !otpSent) {
+          setAuthLoading(true);
+          try {
+              const res = await fetch(`${API_URL}/auth/send-otp`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ method: authTab, email: authEmail, phone: authPhone })
+              });
+              
+              if (res.ok) {
+                  setAuthLoading(false);
+                  setOtpSent(true);
+                  addToast(`تم إرسال رمز التحقق إلى ${authTab === 'email' ? 'إيميلك' : 'رقمك'} بنجاح!`, 'success');
+              } else {
+                  const data = await res.json();
+                  setAuthError(data.error || 'حدث خطأ أثناء إرسال الرمز');
+                  setAuthLoading(false);
+              }
+          } catch (error) {
               setTimeout(() => {
                   setAuthLoading(false);
                   setOtpSent(true);
-                  addToast(`تم إرسال رمز التحقق إلى ${authTab === 'email' ? 'البريد الإلكتروني' : 'رقم الهاتف'} (للتجربة أدخل 123456)`, 'success');
+                  addToast(`(وضع التجربة) السيرفر غير متصل، استخدم الرمز 123456`, 'info');
               }, 1000);
-              return;
-          } else {
-              // تأكيد الرمز وإنشاء الحساب
-              if(otpCode !== '123456' && otpCode.length > 0) { // محاكاة (أي رمز يمر باستثناء فارغ)
-                  // في الواقع نتحقق من الرمز هنا
-              }
-              // التأكد أن الحساب غير موجود مسبقاً
-              const exists = dbUsers.find(u => (authTab === 'email' && u.email === authEmail) || (authTab === 'phone' && u.phone === authPhone));
-              if (exists) {
-                  setAuthError('هذا الحساب مسجل مسبقاً! يرجى تسجيل الدخول.');
-                  return;
-              }
-              const newUser = { 
-                  uid: 'u_' + Date.now(), 
-                  email: authTab === 'email' ? authEmail : null, 
-                  phone: authTab === 'phone' ? authPhone : null, 
-                  password: authPassword,
-                  isGuest: false
-              };
-              dbUsers.push(newUser);
-              localStorage.setItem('sh_db_users', JSON.stringify(dbUsers));
-              setUser(newUser);
-              localStorage.setItem('sh_user', JSON.stringify(newUser));
-              setAuthModal(null);
-              addToast('تم إنشاء الحساب وتسجيل الدخول بنجاح!', 'success');
+          }
+          return;
+      }
+      
+      // عملية تأكيد الرمز وإنشاء حساب جديد
+      if (authModal === 'signup' && otpSent) {
+          if(otpCode !== '123456' && otpCode.length > 0) { 
+              // في النظام الحقيقي، يتم هنا إرسال الرمز للسيرفر للتحقق
+          }
+          const exists = dbUsers.find(u => (authTab === 'email' && u.email === authEmail) || (authTab === 'phone' && u.phone === authPhone));
+          if (exists) {
+              setAuthError('هذا الحساب مسجل مسبقاً! يرجى تسجيل الدخول.');
               return;
           }
+          const newUser = { 
+              uid: 'u_' + Date.now(), 
+              email: authTab === 'email' ? authEmail : null, 
+              phone: authTab === 'phone' ? authPhone : null, 
+              password: authPassword,
+              isGuest: false
+          };
+          dbUsers.push(newUser);
+          localStorage.setItem('sh_db_users', JSON.stringify(dbUsers));
+          setUser(newUser);
+          localStorage.setItem('sh_user', JSON.stringify(newUser));
+          setAuthModal(null);
+          addToast('تم إنشاء الحساب وتسجيل الدخول بنجاح!', 'success');
+          return;
       }
       
       // عملية تسجيل الدخول
@@ -439,17 +457,6 @@ export default function App() {
               return;
           }
 
-          if (authTab === 'phone' && !otpSent) {
-              setAuthLoading(true);
-              setTimeout(() => {
-                  setAuthLoading(false);
-                  setOtpSent(true);
-                  addToast('تم إرسال رمز الدخول لرقمك (أدخل 123456)', 'success');
-              }, 1000);
-              return;
-          }
-
-          // تسجيل الدخول النهائي
           const loggedInUser = accountFound || { 
               uid: 'admin_' + Date.now(), 
               email: authEmail, 
@@ -501,13 +508,13 @@ export default function App() {
     const formData = new FormData(e.target);
     const formValues = Object.fromEntries(formData.entries());
 
-    // 🌟 2. التحقق من صحة رقم الهاتف (10 أرقام) 🌟
+    // 🌟 التحقق من صحة رقم الهاتف (10 أرقام) 🌟
     const phoneStr = formValues.phone.trim();
     if (!/^\d{10}$/.test(phoneStr)) {
         setPhoneError("يرجى إدخال رقم هاتف صحيح مكون من 10 أرقام (مثال: 0912345678)");
-        return; // إيقاف الإرسال
+        return; 
     }
-    setPhoneError(""); // مسح الخطأ إذا كان صحيحاً
+    setPhoneError(""); 
 
     localStorage.setItem('sh-user-name', formValues.name);
     localStorage.setItem('sh-user-phone', phoneStr);
@@ -639,7 +646,25 @@ export default function App() {
     addToast('تم إرسال التنبيه وسيظهر للعملاء فوراً!', 'success');
   };
 
-  // 🌟 4. دالة حساب التكلفة التقديرية للفاتورة 🌟
+  const renderOrderInfo = (order) => {
+    if (order.serviceType === 'reward') return `استبدال هدية (${order.pointsUsed} نقطة)`;
+    if (order.serviceType === 'car') {
+       const durationLabel = order.rentDuration === 'daily' ? 'أيام' : order.rentDuration === 'weekly' ? 'أسابيع' : 'أشهر';
+       return `المدة: ${order.durationCount || 1} ${durationLabel} | السائق: ${order.driverOption === 'with_driver' ? 'مع سائق' : 'بدون'} | البدء: ${order.startDate || 'غير محدد'}`;
+    }
+    if (order.serviceType === 'hotel') return `البدء: ${order.checkIn} (${order.nightCount} ليلة)`;
+    if (order.serviceType === 'bus' && order.busSubCategory === 'contract') return `${order.orgName} | باصات: ${order.busCount}`;
+    if (order.serviceType === 'bus') return `ترفيهي: ${order.tripDate}`;
+    if (order.serviceType === 'flights') return `من ${order.fromAirport} لـ ${order.toAirport} بتاريخ ${order.flightDate}`;
+    if (order.serviceType === 'transit') return `من ${order.fromLocation} إلى ${order.toLocation} | ${order.transitType} | حقائب: ${order.bagsCount || '1'} | موعد: ${order.tripDate} ${order.tripTime}`;
+    if (order.serviceType === 'services') {
+       if (order.fromCity && order.toCity) return `من: ${order.fromCity} إلى: ${order.toCity}`;
+       return `الخدمة المطلوبة مسجلة`;
+    }
+    if (order.serviceType === 'events') return `عدد: ${order.paxCount}`;
+    return 'تفاصيل عامة';
+  };
+
   const calculateEstimatedPrice = (order) => {
       let total = 0;
       let pax = parseInt(order.paxCount) || 1;
@@ -651,7 +676,7 @@ export default function App() {
       else if (order.serviceType === 'flights') total = pax * 1200000;
       else if (order.serviceType === 'events') total = pax * 100000;
       else if (order.serviceType === 'bus' && order.busSubCategory === 'contract') total = (parseInt(order.busCount)||1) * 500000;
-      else total = pax * 50000; // default
+      else total = pax * 50000; 
       
       return new Intl.NumberFormat('ar-SY', { style: 'currency', currency: 'SYP' }).format(total);
   };
@@ -780,7 +805,6 @@ export default function App() {
                       </div>
                   </div>
 
-                  {/* أزرار الإجراءات (تختفي عند الطباعة) */}
                   <div className="flex gap-4 mt-12 no-print border-t border-gray-200 pt-6">
                       <button onClick={() => window.print()} className="flex-1 bg-emerald-600 text-white py-4 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-500/30">
                           <Printer size={18}/> طباعة / حفظ كـ PDF
@@ -799,7 +823,6 @@ export default function App() {
     <div className="min-h-screen bg-[#0B192C] text-white font-sans overflow-x-hidden pb-32" dir="rtl">
       <ToastContainer />
 
-      {/* Ticker Banner */}
       <div className="bg-emerald-500/10 border-b border-emerald-500/20 py-2.5 overflow-hidden whitespace-nowrap sticky top-0 z-40 backdrop-blur-md">
         <div className="flex animate-marquee hover:[animation-play-state:paused] space-x-12 space-x-reverse items-center">
             <span className="text-[10px] font-black text-emerald-400 flex items-center gap-4">
@@ -809,7 +832,6 @@ export default function App() {
                 <Sparkles size={12}/> 
                 كل ما تحتاجه في عالم السياحة والسفر
             </span>
-            {/* 🌟 6. إخفاء السعر من الشريط الإخباري 🌟 */}
             {dynamicEvents.map(ev => (
                 <span 
                     key={ev.id} 
@@ -829,7 +851,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Header */}
       <header className="p-5 sticky top-10 z-50 bg-[#0B192C]/95 backdrop-blur-xl border-b border-white/5 flex justify-between items-center shadow-xl">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => {setActiveView('main'); setShowAdminPanel(false); setSelectedCategory(null); setSelectedHotel(null); setSelectedCity(null); setSelectedBusType(null); setShowNotifications(false);}}>
            <HTLogo />
@@ -843,7 +864,6 @@ export default function App() {
         </div>
         
         <div className="flex items-center gap-2">
-            {/* التنبيهات (الجرس) */}
             <div className="relative">
                 <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 rounded-xl border border-white/10 bg-white/5 text-slate-300 hover:text-white transition-colors">
                     <BellRing size={16} className={unreadCount > 0 ? "animate-pulse text-amber-400" : ""} />
@@ -1042,7 +1062,6 @@ export default function App() {
           </div>
       )}
 
-      {/* Logout Confirmation Modal */}
       {logoutConfirm && (
         <div className="fixed inset-0 bg-black/95 z-[9000] flex items-center justify-center p-6 backdrop-blur-sm">
            <div className="bg-[#112240] p-8 rounded-[3rem] border border-rose-500/20 text-center shadow-2xl max-w-sm w-full animate-in zoom-in-95">
@@ -1050,7 +1069,7 @@ export default function App() {
                   <LogOut size={32} className="text-rose-500" />
               </div>
               <h3 className="text-xl font-black text-white mb-2">تسجيل الخروج</h3>
-              <p className="text-xs text-white/50 mb-8 font-bold">هل أنت متأكد أنك تريد تسجيل الخروج من حسابك؟</p>
+              <p className="text-xs text-white/50 mb-8 font-bold">هل أنت متأكد أن تريد تسجيل الخروج من حسابك؟</p>
               <div className="flex gap-3">
                  <button onClick={executeLogout} className="flex-1 bg-rose-600 py-4 rounded-2xl font-black text-xs text-white shadow-lg active:scale-95 transition-all">نعم، خروج</button>
                  <button onClick={() => setLogoutConfirm(false)} className="flex-1 bg-white/5 py-4 rounded-2xl font-black text-xs text-white hover:bg-white/10 transition-all">تراجع</button>
@@ -1093,7 +1112,7 @@ export default function App() {
                         {authModal === 'signup' && otpSent && (
                             <div className="animate-in fade-in slide-in-from-top-2 space-y-4">
                                 <input type="text" required value={otpCode} onChange={(e)=>setOtpCode(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-lg tracking-[0.5em] font-black text-white text-center outline-none focus:border-emerald-500" placeholder="123456" maxLength={6} />
-                                <p className="text-[10px] text-white/40 mb-2">تم إرسال الرمز لبريدك الإلكتروني (للتجربة: أدخل أي أرقام)</p>
+                                <p className="text-[10px] text-white/40 mb-2">(يرجى تفقد بريدك الإلكتروني)</p>
                                 <input type="password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="اختر كلمة مرور جديدة" />
                             </div>
                         )}
@@ -1121,7 +1140,7 @@ export default function App() {
                         ) : (
                            <div className="animate-in fade-in slide-in-from-top-2 space-y-4">
                               <input type="text" required value={otpCode} onChange={(e)=>setOtpCode(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-lg tracking-[0.5em] font-black text-white text-center outline-none focus:border-emerald-500" placeholder="123456" maxLength={6} />
-                              <p className="text-[10px] text-white/40">تم إرسال الرمز لرقمك (للتجربة: أدخل أي أرقام)</p>
+                              <p className="text-[10px] text-white/40">(يرجى تفقد رسائل الهاتف)</p>
                               <button type="submit" disabled={authLoading || !otpCode} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all disabled:opacity-50 mt-2">
                                  {authLoading ? 'جاري التأكيد...' : (authModal === 'login' ? 'تأكيد الدخول' : 'تأكيد وإنشاء الحساب')}
                               </button>
@@ -1147,7 +1166,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Editing Car Modal */}
       {editingCar && isUserAdmin && (
           <div className="fixed inset-0 bg-black/95 z-[8000] flex items-center justify-center p-6 text-right">
              <div className="bg-[#112240] w-full max-w-sm p-8 rounded-[2.5rem] border border-emerald-500/20 shadow-2xl animate-in zoom-in-95">
@@ -1165,7 +1183,6 @@ export default function App() {
 
       <main className="p-4 max-w-5xl mx-auto">
         {showAdminPanel && isUserAdmin ? (
-          /* ADMIN VIEW */
           <div className="space-y-6 animate-in">
              <div className="flex bg-[#0F172A] p-1.5 rounded-2xl border border-white/5 mb-4 gap-1">
                 <button onClick={() => setAdminTab('orders')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-bold ${adminTab === 'orders' ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500'}`}>الطلبات</button>
@@ -1227,7 +1244,6 @@ export default function App() {
                  </div>
                </div>
              ) : adminTab === 'marketing' ? (
-                /* MARKETING FORM */
                 <div className="space-y-6 max-w-xl mx-auto">
                     <form onSubmit={addMarketingEvent} className="bg-[#112240] p-8 rounded-[3rem] border border-white/5 shadow-2xl">
                         <h3 className="text-lg font-black text-white mb-6">إدراج إعلان جديد</h3>
@@ -1263,7 +1279,6 @@ export default function App() {
                     </div>
                 </div>
              ) : adminTab === 'alerts' ? (
-                /* ADMIN ALERTS FORM */
                 <div className="space-y-6 max-w-xl mx-auto animate-in slide-in-from-right-4 pb-10">
                     <form onSubmit={sendGlobalAlert} className="bg-[#112240] p-8 rounded-[3rem] border border-emerald-500/20 shadow-2xl relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-bl-full pointer-events-none"></div>
@@ -1283,7 +1298,6 @@ export default function App() {
              ) : null}
           </div>
         ) : (
-          /* USER VIEWS */
           <div className="space-y-6 pb-10">
             {activeView === 'main' && (
               <div className="space-y-6 max-w-xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -1292,7 +1306,6 @@ export default function App() {
                    <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-transparent"></div>
                    <div className="absolute top-6 left-6"><HTLogo /></div>
                    
-                   {/* التوقيع الاحترافي 3 - الواجهة الرئيسية */}
                    <div className="absolute bottom-6 right-6 text-right z-10">
                       <h2 className="text-3xl font-black italic uppercase leading-none mb-1.5 drop-shadow-lg">شهبا <span className="text-emerald-400">Go</span></h2>
                       <div className="inline-block bg-black/40 backdrop-blur-md border border-white/10 px-2.5 py-1 rounded-lg mb-3 shadow-lg">
@@ -1336,7 +1349,6 @@ export default function App() {
               </div>
             )}
 
-            {/* WALLET */}
             {activeView === 'wallet' && (
               <div className="space-y-6 max-w-xl mx-auto animate-in">
                  <div className="bg-gradient-to-br from-emerald-900 to-[#112240] p-8 rounded-[3rem] text-center border border-emerald-500/20 shadow-2xl relative overflow-hidden">
@@ -1372,7 +1384,6 @@ export default function App() {
                   </div>
 
                   <div className="space-y-4 pb-10">
-                    {/* FLIGHTS */}
                     {selectedCategory === 'flights' && (
                         <div className="space-y-4 animate-in fade-in">
                             <div className="relative bg-[#112240] w-full h-[450px] rounded-[3rem] overflow-hidden shadow-2xl border border-cyan-500/20 group">
@@ -1400,11 +1411,10 @@ export default function App() {
                         </div>
                     )}
 
-                    {/* TRANSIT */}
                     {selectedCategory === 'transit' && (
                         <div className="space-y-4 animate-in fade-in">
                             <div className="relative bg-[#112240] w-full h-[400px] rounded-[3rem] overflow-hidden shadow-2xl border border-indigo-500/20 group">
-                                <img src="/c13.jpg" alt="النقل البري" className="absolute inset-0 w-full h-full object-cover opacity-50" />
+                                <img src="/transit-bg.jpg" onError={(e) => e.target.src='https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=800'} alt="النقل البري" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity duration-700" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/60 to-transparent"></div>
                                 
                                 <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
@@ -1423,7 +1433,18 @@ export default function App() {
                         </div>
                     )}
 
-                    {/* SERVICES */}
+                    {selectedCategory === 'services' && (
+                        <div className="relative bg-[#112240] w-full h-[200px] rounded-[3rem] overflow-hidden shadow-xl border border-slate-500/20 mb-6 group animate-in fade-in">
+                            <img src="/services-bg.jpg" onError={(e) => e.target.src='https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?q=80&w=800'} alt="خدمات" className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity duration-700" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/60 to-transparent"></div>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
+                                <FileCheck size={32} className="text-slate-400 mb-3 animate-pulse" />
+                                <h3 className="font-black text-2xl text-white mb-2 drop-shadow-md">خدمات إضافية</h3>
+                                <p className="text-xs text-white/80 font-bold drop-shadow-md">إنجاز المعاملات، الفيزا، والبريد بكل أمان</p>
+                            </div>
+                        </div>
+                    )}
+
                     {selectedCategory === 'services' && (
                         <div className="grid grid-cols-1 gap-4">
                            {PUBLIC_SERVICES_LIST.map(srv => (
@@ -1439,7 +1460,18 @@ export default function App() {
                         </div>
                     )}
 
-                    {/* CARS */}
+                    {selectedCategory === 'car' && (
+                        <div className="relative bg-[#112240] w-full h-[200px] rounded-[3rem] overflow-hidden shadow-xl border border-emerald-500/20 mb-6 group animate-in fade-in">
+                            <img src="/car-bg.jpg" onError={(e) => e.target.src='https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?q=80&w=800'} alt="سيارات" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity duration-700" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/60 to-transparent"></div>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
+                                <Car size={32} className="text-emerald-400 mb-3 animate-pulse" />
+                                <h3 className="font-black text-2xl text-white mb-2 drop-shadow-md">آجار سيارات</h3>
+                                <p className="text-xs text-white/80 font-bold drop-shadow-md">أحدث السيارات وأفضل الأسعار لراحتك</p>
+                            </div>
+                        </div>
+                    )}
+
                     {selectedCategory === 'car' && carsList.map(car => (
                         <div key={car.id} className="bg-[#112240] rounded-[2.5rem] overflow-hidden p-4 shadow-lg border border-white/5 group hover:border-emerald-500/30 transition-all">
                            <div className="relative">
@@ -1460,7 +1492,18 @@ export default function App() {
                         </div>
                     ))}
 
-                    {/* BUSES */}
+                    {selectedCategory === 'bus' && !selectedBusType && (
+                        <div className="relative bg-[#112240] w-full h-[200px] rounded-[3rem] overflow-hidden shadow-xl border border-blue-500/20 mb-6 group animate-in fade-in">
+                            <img src="/bus-bg.jpg" onError={(e) => e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=800'} alt="باصات" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity duration-700" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/60 to-transparent"></div>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
+                                <Bus size={32} className="text-blue-400 mb-3 animate-bounce" />
+                                <h3 className="font-black text-2xl text-white mb-2 drop-shadow-md">خدمات الباصات</h3>
+                                <p className="text-xs text-white/80 font-bold drop-shadow-md">عقود مستمرة ورحلات ترفيهية ممتعة</p>
+                            </div>
+                        </div>
+                    )}
+
                     {selectedCategory === 'bus' && !selectedBusType && BUS_TYPES.map(type => (
                           <button key={type.id} onClick={() => {setSelectedBusType(type.id); if(type.id === 'leisure') setBookingItem(type);}} className="p-6 bg-[#112240] border border-white/5 rounded-[2.5rem] w-full flex items-center gap-5 text-right shadow-lg hover:bg-white/5 transition-all group">
                              <div className={`w-14 h-14 ${type.color} rounded-2xl flex items-center justify-center`}><type.icon size={24}/></div>
@@ -1479,7 +1522,18 @@ export default function App() {
                        </div>
                     )}
 
-                    {/* HOTELS */}
+                    {selectedCategory === 'hotel' && !selectedCity && (
+                        <div className="relative bg-[#112240] w-full h-[200px] rounded-[3rem] overflow-hidden shadow-xl border border-amber-500/20 mb-6 group animate-in fade-in">
+                            <img src="/hotel-bg.jpg" onError={(e) => e.target.src='https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=800'} alt="فنادق" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity duration-700" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/60 to-transparent"></div>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
+                                <Hotel size={32} className="text-amber-400 mb-3 animate-pulse" />
+                                <h3 className="font-black text-2xl text-white mb-2 drop-shadow-md">حجوزات الفنادق</h3>
+                                <p className="text-xs text-white/80 font-bold drop-shadow-md">أفضل الفنادق لإقامة مريحة ولا تُنسى</p>
+                            </div>
+                        </div>
+                    )}
+
                     {selectedCategory === 'hotel' && !selectedCity && (
                        <div className="grid grid-cols-2 gap-4">
                           {CITIES.map(city => (
@@ -1536,7 +1590,18 @@ export default function App() {
                          </div>
                     )}
 
-                    {/* EVENTS */}
+                    {selectedCategory === 'events' && (
+                        <div className="relative bg-[#112240] w-full h-[200px] rounded-[3rem] overflow-hidden shadow-xl border border-rose-500/20 mb-6 group animate-in fade-in">
+                            <img src="/events-bg.jpg" onError={(e) => e.target.src='https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=800'} alt="فعاليات" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity duration-700" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/60 to-transparent"></div>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
+                                <PartyPopper size={32} className="text-rose-400 mb-3 animate-bounce" />
+                                <h3 className="font-black text-2xl text-white mb-2 drop-shadow-md">فعاليات ورحلات</h3>
+                                <p className="text-xs text-white/80 font-bold drop-shadow-md">اصنع أجمل الذكريات مع فعالياتنا المميزة</p>
+                            </div>
+                        </div>
+                    )}
+
                     {selectedCategory === 'events' && dynamicEvents.filter(ev => ev.postType !== 'offer').map(event => {
                          const EventIcon = event.iconType === 'sea' ? Ship : event.iconType === 'tent' ? Tent : Music;
                          return (
@@ -1554,7 +1619,6 @@ export default function App() {
                </div>
             )}
 
-            {/* 🌟 سجل طلباتي وتذكرة الحجز (Voucher) 🌟 */}
             {activeView === 'bookings' && (
               <div className="space-y-6 animate-in max-w-4xl mx-auto pb-20">
                  <h2 className="text-xl font-black text-white px-2">سجل طلباتي</h2>
@@ -1607,7 +1671,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Unified Booking Modal */}
       {bookingItem && (
         <div className="fixed inset-0 bg-black/95 z-[1000] flex items-center justify-center p-4">
            <div className="bg-[#112240] w-full max-w-md p-6 rounded-[3rem] border border-white/10 relative overflow-y-auto max-h-[95vh] shadow-2xl">
@@ -1639,17 +1702,14 @@ export default function App() {
 
               <form onSubmit={submitBooking} className="space-y-4 text-right">
                  
-                 {/* CONTACT INFO */}
                  <div className="grid grid-cols-2 gap-4">
                     <input name="name" required defaultValue={bookingItem?.isEditMode ? bookingItem.name : ""} className="w-full bg-[#0B192C] border border-white/5 rounded-2xl p-4 text-xs text-white text-right outline-none focus:border-emerald-500 shadow-inner" placeholder="الاسم الكامل" />
                     <div>
                         <input name="phone" required defaultValue={bookingItem?.isEditMode ? bookingItem.phone : (localStorage.getItem('sh-user-phone') || "")} className={`w-full bg-[#0B192C] border rounded-2xl p-4 text-xs text-left outline-none shadow-inner ${phoneError ? 'border-rose-500 text-rose-400' : 'border-white/5 text-white focus:border-emerald-500'}`} placeholder="09xxxxxx" />
                     </div>
                  </div>
-                 {/* 🌟 إظهار خطأ رقم الهاتف هنا 🌟 */}
                  {phoneError && <p className="text-[9px] text-rose-400 font-bold bg-rose-500/10 p-2 rounded-lg border border-rose-500/20">{phoneError}</p>}
 
-                 {/* HOTEL SPECIFIC FIELDS */}
                  {selectedCategory === 'hotel' && (
                    <div className="space-y-3 p-4 bg-amber-500/5 rounded-3xl border border-amber-500/10">
                       <div className="bg-amber-500/10 p-2 rounded-xl text-amber-400 text-[9px] font-bold text-center flex justify-center items-center gap-1"><Info size={12}/> الاستلام والتسليم الساعة 11 صباحاً</div>
@@ -1697,7 +1757,19 @@ export default function App() {
                    </div>
                  )}
 
-                 {/* 🌟 3. قوائم النقل البري المنسدلة 🌟 */}
+                 {selectedCategory === 'flights' && (
+                   <div className="space-y-3 p-4 bg-cyan-500/5 rounded-3xl border border-cyan-500/10">
+                      <div className="grid grid-cols-2 gap-3">
+                         <input name="fromAirport" required placeholder="من مطار..." defaultValue={bookingItem?.fromAirport || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-cyan-500" />
+                         <input name="toAirport" required placeholder="إلى مطار..." defaultValue={bookingItem?.toAirport || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-cyan-500" />
+                      </div>
+                      <div className="space-y-1">
+                         <label className="text-[9px] text-cyan-500/50 mr-2">تاريخ الرحلة</label>
+                         <input name="flightDate" type="date" required defaultValue={bookingItem?.flightDate || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-cyan-500" />
+                      </div>
+                   </div>
+                 )}
+
                  {selectedCategory === 'transit' && (
                    <div className="space-y-3 p-4 bg-indigo-500/5 rounded-3xl border border-indigo-500/10">
                       <div className="grid grid-cols-2 gap-3">
@@ -1747,7 +1819,6 @@ export default function App() {
                    </div>
                  )}
 
-                 {/* SERVICES SPECIFIC FIELDS */}
                  {selectedCategory === 'services' && (
                    <div className="space-y-3 p-4 bg-slate-500/5 rounded-3xl border border-slate-500/10">
                       {bookingItem?.id === 'mail' && (
@@ -1767,7 +1838,6 @@ export default function App() {
                    </div>
                  )}
 
-                 {/* BUS CONTRACTS FIELDS */}
                  {selectedCategory === 'bus' && selectedBusType === 'contract' && (
                    <div className="space-y-3 p-4 bg-blue-500/5 rounded-3xl border border-blue-500/10">
                       <input name="orgName" required placeholder="اسم المدرسة / المعمل" defaultValue={bookingItem?.orgName || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-blue-500" />
@@ -1788,8 +1858,7 @@ export default function App() {
                    </div>
                  )}
 
-                 {/* BUS LEISURE & EVENTS FIELDS */}
-                 {(selectedCategory === 'bus' && selectedBusType === 'leisure') && (
+                 {selectedCategory === 'bus' && selectedBusType === 'leisure' && (
                    <div className="space-y-3 p-4 bg-emerald-500/5 rounded-3xl border border-emerald-500/10">
                       <div className="grid grid-cols-2 gap-3">
                          <div className="space-y-1">
@@ -1814,7 +1883,6 @@ export default function App() {
                     </div>
                  )}
 
-                 {/* CAR OPTIONS */}
                  {selectedCategory === 'car' && (
                     <div className="space-y-3 p-4 bg-emerald-500/5 rounded-3xl border border-emerald-500/10">
                         <div className="grid grid-cols-2 gap-3">
@@ -1848,7 +1916,6 @@ export default function App() {
                     </div>
                  )}
 
-                 {/* PAYMENT SECTION - ALWAYS AT THE BOTTOM */}
                  <div className="pt-4 border-t border-white/5 space-y-3">
                     <p className="text-[9px] font-black text-white/40 uppercase">اختر طريقة الدفع المفضلة</p>
                     <div className="grid grid-cols-2 gap-3">
@@ -1872,7 +1939,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Admin Rejection Modal */}
       {rejectModal && (
         <div className="fixed inset-0 bg-black/95 z-[7000] flex items-center justify-center p-6">
            <div className="bg-[#112240] w-full max-w-sm p-8 rounded-[2.5rem] border border-rose-500/20 space-y-4 shadow-2xl animate-in zoom-in-95">
@@ -1900,7 +1966,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Success Modal */}
       {showSuccessCard && (
         <div className="fixed inset-0 bg-emerald-950/90 backdrop-blur-md z-[2000] flex items-center justify-center p-6 text-black">
            <div className="bg-white w-full max-w-sm p-10 rounded-[4rem] text-center shadow-2xl relative overflow-hidden animate-in zoom-in-75">
@@ -1922,7 +1987,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Navigation Bar */}
       <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-[#112240]/95 backdrop-blur-3xl border border-white/5 rounded-[3.5rem] p-4 flex justify-around shadow-2xl z-[500] border-t border-emerald-500/10">
          <button onClick={() => {setActiveView('main'); setShowAdminPanel(false); setSelectedCategory(null); setSelectedHotel(null); setSelectedCity(null); setSelectedBusType(null);}} className={`${activeView === 'main' && !showAdminPanel ? 'text-emerald-400 scale-110 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'text-white/30'} flex flex-col items-center gap-1.5 transition-all duration-300`}>
             <LayoutGrid size={22}/><span className="text-[8px] font-black uppercase">الرئيسية</span>
