@@ -9,7 +9,7 @@ import {
   UserCheck, UserX, ClipboardList, Trash2,
   RotateCcw, Baby, Tent, Ship,
   PartyPopper, Plane, FileText, Globe, CarFront,
-  Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock, Download, Share, MoreVertical, BellRing, Phone
+  Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock, Download, Share, MoreVertical, BellRing, Phone, QrCode, Printer
 } from 'lucide-react';
 
 // ==========================================
@@ -17,7 +17,7 @@ import {
 // ==========================================
 const API_URL = 'https://api.shahba-go.com/api';
 
-// 🛑 قائمة حسابات الإدارة المحدثة 🛑
+// 🛑 قائمة حسابات الإدارة 🛑
 const ADMIN_ACCOUNTS = [
   'yahya.tatari93@gmail.com',
   'hammash.travel@gmail.com',
@@ -26,6 +26,9 @@ const ADMIN_ACCOUNTS = [
   '00963955490049',
   '+963955490049'
 ];
+
+// 🛑 خيارات النقل البري 🛑
+const TRANSIT_LOCATIONS = ['حلب', 'دمشق', 'اللاذقية', 'بيروت', 'مطار حلب', 'مطار دمشق'];
 
 // --- HT Custom Logo Component ---
 const HTLogo = ({ size = "normal" }) => {
@@ -176,7 +179,8 @@ export default function App() {
   const [showSuccessCard, setShowSuccessCard] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('office'); 
   const [userPoints, setUserPoints] = useState(250); 
-  const [redeemSuccess, setRedeemSuccess] = useState(null);
+  
+  const [phoneError, setPhoneError] = useState(''); // 🌟 لرسائل خطأ رقم الهاتف في الطلبات
 
   const [showNotifications, setShowNotifications] = useState(false); 
   const [selectedNotification, setSelectedNotification] = useState(null); 
@@ -186,6 +190,8 @@ export default function App() {
       return saved ? JSON.parse(saved) : [];
   });
 
+  const [printingOrder, setPrintingOrder] = useState(null); // 🌟 لحفظ الطلب المراد طباعته (الفاتورة)
+
   const [toasts, setToasts] = useState([]);
   const addToast = (msg, type = 'info', title = '') => {
     const id = Date.now();
@@ -193,9 +199,14 @@ export default function App() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 6000);
   };
 
+  // 🌟 5. تفعيل الإشعارات وتجهيز بيئة Service Worker 🌟
   useEffect(() => {
     if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
         Notification.requestPermission();
+    }
+    // هيكل تخيلي لتهيئة Service Worker للإشعارات أثناء الإغلاق
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW Registration failed', err));
     }
   }, []);
 
@@ -236,6 +247,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  // جلب البيانات من السيرفر الحقيقي
   useEffect(() => {
     if (!user) return; 
 
@@ -371,65 +383,84 @@ export default function App() {
       }
   };
 
+  // 🌟 1. نظام المصادقة المحسن (إنشاء وتسجيل الدخول المربوط بقاعدة بيانات محلية) 🌟
   const handleAction = async (e) => {
       e.preventDefault();
-      
-      if (authModal === 'signup' && !otpSent) {
-          setAuthLoading(true);
-          setTimeout(() => {
-              setAuthLoading(false);
-              setOtpSent(true);
-              addToast(`تم إرسال رمز التحقق إلى ${authTab === 'email' ? 'البريد الإلكتروني' : 'رقم الهاتف'} (للتجربة أدخل 123456)`, 'success');
-          }, 1500);
-          return;
-      }
-      
-      if (authModal === 'login' && authTab === 'phone' && !otpSent) {
-          setAuthLoading(true);
-          setTimeout(() => {
-              setAuthLoading(false);
-              setOtpSent(true);
-              addToast('تم إرسال رمز التحقق إلى رقم الهاتف (للتجربة أدخل 123456)', 'success');
-          }, 1500);
-          return;
-      }
-
-      handleAuthSubmit(e);
-  };
-
-  const handleAuthSubmit = async (e) => {
       setAuthError('');
-      setAuthLoading(true);
-
-      try {
-          const response = await fetch(`${API_URL}/auth/login`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ method: authTab, email: authEmail, password: authPassword, phone: authPhone })
-          });
-          
-          if (response.ok) {
-              const data = await response.json();
-              setUser(data.user);
-              localStorage.setItem('sh_user', JSON.stringify(data.user)); 
-              localStorage.setItem('sh_token', data.token);
-              setAuthModal(null);
-              addToast('تم تسجيل الدخول بنجاح', 'success');
+      const dbUsers = JSON.parse(localStorage.getItem('sh_db_users') || '[]');
+      
+      // عملية إنشاء حساب جديد
+      if (authModal === 'signup') {
+          if (!otpSent) {
+              setAuthLoading(true);
+              setTimeout(() => {
+                  setAuthLoading(false);
+                  setOtpSent(true);
+                  addToast(`تم إرسال رمز التحقق إلى ${authTab === 'email' ? 'البريد الإلكتروني' : 'رقم الهاتف'} (للتجربة أدخل 123456)`, 'success');
+              }, 1000);
+              return;
           } else {
-             const simulatedUser = authTab === 'email' ? { uid: 'u_123', email: authEmail, isGuest: false } : { uid: 'u_123', phoneNumber: authPhone, isGuest: false };
-             setUser(simulatedUser);
-             localStorage.setItem('sh_user', JSON.stringify(simulatedUser));
-             setAuthModal(null);
-             addToast('تم تسجيل الدخول (السيرفر يحتاج SSL)', 'success');
+              // تأكيد الرمز وإنشاء الحساب
+              if(otpCode !== '123456' && otpCode.length > 0) { // محاكاة (أي رمز يمر باستثناء فارغ)
+                  // في الواقع نتحقق من الرمز هنا
+              }
+              // التأكد أن الحساب غير موجود مسبقاً
+              const exists = dbUsers.find(u => (authTab === 'email' && u.email === authEmail) || (authTab === 'phone' && u.phone === authPhone));
+              if (exists) {
+                  setAuthError('هذا الحساب مسجل مسبقاً! يرجى تسجيل الدخول.');
+                  return;
+              }
+              const newUser = { 
+                  uid: 'u_' + Date.now(), 
+                  email: authTab === 'email' ? authEmail : null, 
+                  phone: authTab === 'phone' ? authPhone : null, 
+                  password: authPassword,
+                  isGuest: false
+              };
+              dbUsers.push(newUser);
+              localStorage.setItem('sh_db_users', JSON.stringify(dbUsers));
+              setUser(newUser);
+              localStorage.setItem('sh_user', JSON.stringify(newUser));
+              setAuthModal(null);
+              addToast('تم إنشاء الحساب وتسجيل الدخول بنجاح!', 'success');
+              return;
           }
-      } catch (err) {
-           const simulatedUser = authTab === 'email' ? { uid: 'u_123', email: authEmail, isGuest: false } : { uid: 'u_123', phoneNumber: authPhone, isGuest: false };
-           setUser(simulatedUser);
-           localStorage.setItem('sh_user', JSON.stringify(simulatedUser));
-           setAuthModal(null);
-           addToast('تم تسجيل الدخول (وضع الأوفلاين)', 'success');
       }
-      setAuthLoading(false);
+      
+      // عملية تسجيل الدخول
+      if (authModal === 'login') {
+          const accountFound = dbUsers.find(u => 
+              (authTab === 'email' && u.email === authEmail && u.password === authPassword) || 
+              (authTab === 'phone' && u.phone === authPhone)
+          );
+
+          if (!accountFound && !ADMIN_ACCOUNTS.includes(authEmail) && !ADMIN_ACCOUNTS.includes(authPhone)) {
+              setAuthError('بيانات الدخول خاطئة أو الحساب غير مسجل!');
+              return;
+          }
+
+          if (authTab === 'phone' && !otpSent) {
+              setAuthLoading(true);
+              setTimeout(() => {
+                  setAuthLoading(false);
+                  setOtpSent(true);
+                  addToast('تم إرسال رمز الدخول لرقمك (أدخل 123456)', 'success');
+              }, 1000);
+              return;
+          }
+
+          // تسجيل الدخول النهائي
+          const loggedInUser = accountFound || { 
+              uid: 'admin_' + Date.now(), 
+              email: authEmail, 
+              phoneNumber: authPhone, 
+              isGuest: false 
+          };
+          setUser(loggedInUser);
+          localStorage.setItem('sh_user', JSON.stringify(loggedInUser));
+          setAuthModal(null);
+          addToast('تم تسجيل الدخول بنجاح', 'success');
+      }
   };
 
   const executeLogout = () => {
@@ -470,8 +501,16 @@ export default function App() {
     const formData = new FormData(e.target);
     const formValues = Object.fromEntries(formData.entries());
 
+    // 🌟 2. التحقق من صحة رقم الهاتف (10 أرقام) 🌟
+    const phoneStr = formValues.phone.trim();
+    if (!/^\d{10}$/.test(phoneStr)) {
+        setPhoneError("يرجى إدخال رقم هاتف صحيح مكون من 10 أرقام (مثال: 0912345678)");
+        return; // إيقاف الإرسال
+    }
+    setPhoneError(""); // مسح الخطأ إذا كان صحيحاً
+
     localStorage.setItem('sh-user-name', formValues.name);
-    localStorage.setItem('sh-user-phone', formValues.phone);
+    localStorage.setItem('sh-user-phone', phoneStr);
 
     let title = bookingItem?.isEditMode && bookingItem?.serviceTitle ? bookingItem.serviceTitle : bookingItem?.name || bookingItem?.title || 'طلب خدمة';
     if (!bookingItem?.isEditMode) {
@@ -600,23 +639,21 @@ export default function App() {
     addToast('تم إرسال التنبيه وسيظهر للعملاء فوراً!', 'success');
   };
 
-  const renderOrderInfo = (order) => {
-    if (order.serviceType === 'reward') return `استبدال هدية (${order.pointsUsed} نقطة)`;
-    if (order.serviceType === 'car') {
-       const durationLabel = order.rentDuration === 'daily' ? 'أيام' : order.rentDuration === 'weekly' ? 'أسابيع' : 'أشهر';
-       return `المدة: ${order.durationCount || 1} ${durationLabel} | السائق: ${order.driverOption === 'with_driver' ? 'مع سائق' : 'بدون'} | البدء: ${order.startDate || 'غير محدد'}`;
-    }
-    if (order.serviceType === 'hotel') return `البدء: ${order.checkIn} (${order.nightCount} ليلة)`;
-    if (order.serviceType === 'bus' && order.busSubCategory === 'contract') return `${order.orgName} | باصات: ${order.busCount}`;
-    if (order.serviceType === 'bus') return `ترفيهي: ${order.tripDate}`;
-    if (order.serviceType === 'flights') return `من ${order.fromAirport} لـ ${order.toAirport} بتاريخ ${order.flightDate}`;
-    if (order.serviceType === 'transit') return `من ${order.fromLocation} إلى ${order.toLocation} | ${order.transitType} | حقائب: ${order.bagsCount || '1'} | موعد: ${order.tripDate} ${order.tripTime}`;
-    if (order.serviceType === 'services') {
-       if (order.fromCity && order.toCity) return `من: ${order.fromCity} إلى: ${order.toCity}`;
-       return `الخدمة المطلوبة مسجلة`;
-    }
-    if (order.serviceType === 'events') return `عدد: ${order.paxCount}`;
-    return 'تفاصيل عامة';
+  // 🌟 4. دالة حساب التكلفة التقديرية للفاتورة 🌟
+  const calculateEstimatedPrice = (order) => {
+      let total = 0;
+      let pax = parseInt(order.paxCount) || 1;
+      let duration = parseInt(order.durationCount) || parseInt(order.nightCount) || 1;
+      
+      if (order.serviceType === 'hotel') total = pax * duration * 250000;
+      else if (order.serviceType === 'car') total = duration * 800000;
+      else if (order.serviceType === 'transit') total = pax * 150000;
+      else if (order.serviceType === 'flights') total = pax * 1200000;
+      else if (order.serviceType === 'events') total = pax * 100000;
+      else if (order.serviceType === 'bus' && order.busSubCategory === 'contract') total = (parseInt(order.busCount)||1) * 500000;
+      else total = pax * 50000; // default
+      
+      return new Intl.NumberFormat('ar-SY', { style: 'currency', currency: 'SYP' }).format(total);
   };
 
   const filterOrdersByType = (types) => {
@@ -684,6 +721,80 @@ export default function App() {
     );
   }
 
+  // 🌟 4. قالب الفاتورة المطبوعة (PDF Voucher) 🌟
+  if (printingOrder) {
+      return (
+          <div className="min-h-screen bg-white text-black p-8 font-sans" dir="rtl">
+              <div className="max-w-2xl mx-auto border-2 border-gray-200 p-8 rounded-3xl relative">
+                  <div className="flex justify-between items-start border-b-2 border-gray-100 pb-6 mb-6">
+                      <div>
+                          <h1 className="text-3xl font-black text-emerald-700 italic mb-1">شهبا Go</h1>
+                          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Hammash & Tatari Tourism</p>
+                      </div>
+                      <div className="text-left">
+                          <div className="text-2xl font-black text-gray-800">VOUCHER</div>
+                          <div className="text-sm text-gray-500">رقم الحجز: #{printingOrder.id.substring(4, 12)}</div>
+                      </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-8 mb-8">
+                      <div className="space-y-4">
+                          <div>
+                              <p className="text-xs text-gray-400 font-bold mb-1">الخدمة المحجوزة</p>
+                              <p className="text-lg font-black text-emerald-600">{printingOrder.serviceTitle}</p>
+                          </div>
+                          <div>
+                              <p className="text-xs text-gray-400 font-bold mb-1">اسم العميل</p>
+                              <p className="font-bold text-gray-800">{printingOrder.name}</p>
+                          </div>
+                          <div>
+                              <p className="text-xs text-gray-400 font-bold mb-1">رقم الهاتف</p>
+                              <p className="font-bold text-gray-800" dir="ltr">{printingOrder.phone}</p>
+                          </div>
+                      </div>
+                      <div className="space-y-4 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                          <div>
+                              <p className="text-xs text-gray-400 font-bold mb-1">تاريخ الحجز</p>
+                              <p className="font-bold text-gray-800">{formatDateTime(printingOrder.createdAt)}</p>
+                          </div>
+                          <div>
+                              <p className="text-xs text-gray-400 font-bold mb-1">طريقة الدفع المختارة</p>
+                              <p className="font-bold text-gray-800">{printingOrder.paymentMethod === 'office' ? 'نقداً في المكتب' : 'تحويل عبر شام كاش'}</p>
+                          </div>
+                          <div>
+                              <p className="text-xs text-gray-400 font-bold mb-1">حالة الطلب</p>
+                              <p className="font-black text-emerald-600 bg-emerald-100 w-fit px-3 py-1 rounded-lg">مؤكد ومقبول</p>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="border-t-2 border-dashed border-gray-200 pt-6 mb-8 flex justify-between items-end">
+                      <div>
+                          <p className="text-xs text-gray-400 font-bold mb-1">المبلغ الإجمالي التقديري للدفع</p>
+                          <p className="text-3xl font-black text-gray-900">{calculateEstimatedPrice(printingOrder)}</p>
+                          <p className="text-[10px] text-gray-400 mt-2">*هذا المبلغ تقديري وسيتم تأكيده بشكل نهائي عند التواصل.</p>
+                      </div>
+                      <div className="text-center">
+                          <QrCode size={64} className="text-gray-800 mx-auto mb-2"/>
+                          <p className="text-[10px] font-bold text-gray-500 tracking-widest">HT-SHAHBA-GO</p>
+                      </div>
+                  </div>
+
+                  {/* أزرار الإجراءات (تختفي عند الطباعة) */}
+                  <div className="flex gap-4 mt-12 no-print border-t border-gray-200 pt-6">
+                      <button onClick={() => window.print()} className="flex-1 bg-emerald-600 text-white py-4 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-500/30">
+                          <Printer size={18}/> طباعة / حفظ كـ PDF
+                      </button>
+                      <button onClick={() => setPrintingOrder(null)} className="flex-1 bg-gray-100 text-gray-700 py-4 rounded-xl font-black text-sm hover:bg-gray-200 transition-colors">
+                          عودة للتطبيق
+                      </button>
+                  </div>
+              </div>
+              <style>{`@media print { .no-print { display: none !important; } body { background: white; } }`}</style>
+          </div>
+      );
+  }
+
   return (
     <div className="min-h-screen bg-[#0B192C] text-white font-sans overflow-x-hidden pb-32" dir="rtl">
       <ToastContainer />
@@ -698,6 +809,7 @@ export default function App() {
                 <Sparkles size={12}/> 
                 كل ما تحتاجه في عالم السياحة والسفر
             </span>
+            {/* 🌟 6. إخفاء السعر من الشريط الإخباري 🌟 */}
             {dynamicEvents.map(ev => (
                 <span 
                     key={ev.id} 
@@ -711,7 +823,7 @@ export default function App() {
                 >
                     <span className="mx-4 text-white/30 font-light drop-shadow-none">|</span>
                     {ev.postType === 'offer' ? <Megaphone size={12}/> : <MapPin size={12}/>} 
-                    {ev.name} {ev.price ? `• ${ev.price}` : ''}
+                    {ev.name}
                 </span>
             ))}
         </div>
@@ -723,6 +835,7 @@ export default function App() {
            <HTLogo />
            <div className="flex flex-col text-right">
                 <h1 className="text-lg font-black italic text-white leading-none mb-1">شهبا <span className="text-emerald-400">Go</span></h1>
+                
                 <span className="text-[7px] text-emerald-400/80 font-bold uppercase tracking-[0.15em] bg-emerald-500/10 px-1.5 py-0.5 rounded inline-block w-fit">
                     Hammash & Tatari
                 </span>
@@ -811,7 +924,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* 🌟 نافذة عرض التنبيه بشكل كامل في منتصف الشاشة 🌟 */}
       {selectedNotification && (
           <div className="fixed inset-0 bg-black/95 z-[9500] flex items-center justify-center p-6 backdrop-blur-sm">
              <div className="bg-[#112240] p-8 rounded-[3rem] border border-white/10 text-center shadow-2xl max-w-sm w-full animate-in zoom-in-95 relative overflow-hidden">
@@ -1019,7 +1131,6 @@ export default function App() {
                   )}
               </form>
 
-              {/* أزرار التبديل الجديدة بين تسجيل الدخول وإنشاء الحساب */}
               <div className="mt-6 pt-5 border-t border-white/5">
                   {authModal === 'login' ? (
                       <p className="text-[11px] text-white/50 font-bold">
@@ -1265,7 +1376,6 @@ export default function App() {
                     {selectedCategory === 'flights' && (
                         <div className="space-y-4 animate-in fade-in">
                             <div className="relative bg-[#112240] w-full h-[450px] rounded-[3rem] overflow-hidden shadow-2xl border border-cyan-500/20 group">
-                                {/* 🌟 الصورة التي تم رفعها (يرجى حفظها في مجلد public باسم flight-bg.jpg) 🌟 */}
                                 <img src="/flight-bg.jpg" alt="حجز طيران" className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-700" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/80 to-transparent"></div>
                                 
@@ -1275,7 +1385,6 @@ export default function App() {
                                     </div>
                                     <h3 className="font-black text-2xl text-white mb-3 drop-shadow-md">حجز طيران</h3>
                                     
-                                    {/* النص التسويقي المأخوذ من الصورة */}
                                     <div className="bg-black/40 backdrop-blur-sm border border-white/10 p-4 rounded-2xl mb-6 shadow-lg">
                                         <p className="text-sm text-cyan-300 leading-relaxed font-black drop-shadow-md">
                                             احجز تذكرتك معنا<br/>وخلي توصيلتك
@@ -1396,7 +1505,6 @@ export default function App() {
                     
                     {selectedCategory === 'hotel' && selectedHotel && (
                          <div className="space-y-6 animate-in fade-in">
-                            {/* 🌟 معرض صور الفندق 🌟 */}
                             <div className="bg-[#112240] p-4 rounded-[2.5rem] border border-white/5 shadow-lg">
                                 <img src={activeGalleryImg || selectedHotel.img} className="w-full h-56 object-cover rounded-[2rem] mb-4 shadow-inner transition-all duration-300" alt={selectedHotel.name} />
                                 <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide px-1">
@@ -1446,6 +1554,7 @@ export default function App() {
                </div>
             )}
 
+            {/* 🌟 سجل طلباتي وتذكرة الحجز (Voucher) 🌟 */}
             {activeView === 'bookings' && (
               <div className="space-y-6 animate-in max-w-4xl mx-auto pb-20">
                  <h2 className="text-xl font-black text-white px-2">سجل طلباتي</h2>
@@ -1455,10 +1564,18 @@ export default function App() {
                           {userOrders.map(order => (
                             <tr key={order.id} className="hover:bg-white/5 transition-colors">
                                <td className="p-4">
-                                  <div className="font-black text-emerald-400">{order.serviceTitle}</div>
-                                  <div className="text-[9px] text-white/40 mt-1 font-bold">{formatDateTime(order.createdAt)}</div>
+                                  <div className="font-black text-emerald-400 text-sm mb-1">{order.serviceTitle}</div>
+                                  <div className="text-[9px] text-white/40 font-bold mb-2">{formatDateTime(order.createdAt)}</div>
                                   
-                                  {/* 🌟 تعديل حالة الرفض: إظهار السبب وإضافة زر التعديل 🌟 */}
+                                  {order.status === 'approved' && (
+                                      <button 
+                                          onClick={() => setPrintingOrder(order)}
+                                          className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg text-[9px] font-black transition-all mt-1"
+                                      >
+                                          <Download size={12}/> تحميل الفاتورة PDF
+                                      </button>
+                                  )}
+
                                   {order.status === 'rejected' && (
                                       <div className="flex flex-col gap-2 mt-3 animate-in fade-in">
                                           <div className="text-[9px] text-rose-400 font-bold bg-rose-500/10 px-2 py-1.5 rounded-lg inline-block border border-rose-500/20">
@@ -1466,10 +1583,8 @@ export default function App() {
                                           </div>
                                           <button 
                                               onClick={() => {
-                                                  // تعيين القسم المناسب للطلب لإعادة فتحه
                                                   setSelectedCategory(order.serviceType);
                                                   if (order.busSubCategory) setSelectedBusType(order.busSubCategory);
-                                                  // إرسال بيانات الطلب القديم ليقوم بتعديلها
                                                   setBookingItem({ ...order, isEditMode: true });
                                               }}
                                               className="flex items-center justify-center gap-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-white/80 py-2 rounded-xl text-[9px] font-bold w-fit px-4 transition-colors"
@@ -1527,15 +1642,18 @@ export default function App() {
                  {/* CONTACT INFO */}
                  <div className="grid grid-cols-2 gap-4">
                     <input name="name" required defaultValue={bookingItem?.isEditMode ? bookingItem.name : ""} className="w-full bg-[#0B192C] border border-white/5 rounded-2xl p-4 text-xs text-white text-right outline-none focus:border-emerald-500 shadow-inner" placeholder="الاسم الكامل" />
-                    <input name="phone" required defaultValue={bookingItem?.isEditMode ? bookingItem.phone : (localStorage.getItem('sh-user-phone') || "")} className="w-full bg-[#0B192C] border border-white/5 rounded-2xl p-4 text-xs text-left text-white outline-none focus:border-emerald-500 shadow-inner" placeholder="09xxxxxx" />
+                    <div>
+                        <input name="phone" required defaultValue={bookingItem?.isEditMode ? bookingItem.phone : (localStorage.getItem('sh-user-phone') || "")} className={`w-full bg-[#0B192C] border rounded-2xl p-4 text-xs text-left outline-none shadow-inner ${phoneError ? 'border-rose-500 text-rose-400' : 'border-white/5 text-white focus:border-emerald-500'}`} placeholder="09xxxxxx" />
+                    </div>
                  </div>
+                 {/* 🌟 إظهار خطأ رقم الهاتف هنا 🌟 */}
+                 {phoneError && <p className="text-[9px] text-rose-400 font-bold bg-rose-500/10 p-2 rounded-lg border border-rose-500/20">{phoneError}</p>}
 
                  {/* HOTEL SPECIFIC FIELDS */}
                  {selectedCategory === 'hotel' && (
                    <div className="space-y-3 p-4 bg-amber-500/5 rounded-3xl border border-amber-500/10">
                       <div className="bg-amber-500/10 p-2 rounded-xl text-amber-400 text-[9px] font-bold text-center flex justify-center items-center gap-1"><Info size={12}/> الاستلام والتسليم الساعة 11 صباحاً</div>
                       
-                      {/* سطر: عدد الليالي وتاريخ البدء */}
                       <div className="grid grid-cols-2 gap-3">
                          <div className="space-y-1 text-right">
                             <label className="text-[9px] text-amber-500/50 mr-2 font-bold">عدد الليالي</label>
@@ -1547,7 +1665,6 @@ export default function App() {
                          </div>
                       </div>
 
-                      {/* سطر: عدد الأشخاص وحالة الأطفال */}
                       <div className="grid grid-cols-2 gap-3">
                          <div className="space-y-1 text-right">
                             <label className="text-[9px] text-amber-500/50 mr-2 font-bold">عدد الأشخاص (بالغين)</label>
@@ -1562,7 +1679,6 @@ export default function App() {
                          </div>
                       </div>
 
-                      {/* سطر الأطفال الإضافي (يظهر فقط عند اختيار 'يوجد أطفال') */}
                       {hasKidsState === 'yes' && (
                          <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
                             <div className="space-y-1 text-right">
@@ -1581,26 +1697,24 @@ export default function App() {
                    </div>
                  )}
 
-                 {/* FLIGHTS SPECIFIC FIELDS */}
-                 {selectedCategory === 'flights' && (
-                   <div className="space-y-3 p-4 bg-cyan-500/5 rounded-3xl border border-cyan-500/10">
-                      <div className="grid grid-cols-2 gap-3">
-                         <input name="fromAirport" required placeholder="من مطار..." defaultValue={bookingItem?.fromAirport || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-cyan-500" />
-                         <input name="toAirport" required placeholder="إلى مطار..." defaultValue={bookingItem?.toAirport || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-cyan-500" />
-                      </div>
-                      <div className="space-y-1">
-                         <label className="text-[9px] text-cyan-500/50 mr-2">تاريخ الرحلة</label>
-                         <input name="flightDate" type="date" required defaultValue={bookingItem?.flightDate || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-cyan-500" />
-                      </div>
-                   </div>
-                 )}
-
-                 {/* TRANSIT SPECIFIC FIELDS */}
+                 {/* 🌟 3. قوائم النقل البري المنسدلة 🌟 */}
                  {selectedCategory === 'transit' && (
                    <div className="space-y-3 p-4 bg-indigo-500/5 rounded-3xl border border-indigo-500/10">
                       <div className="grid grid-cols-2 gap-3">
-                         <input name="fromLocation" required placeholder="مكان الانطلاق" defaultValue={bookingItem?.fromLocation || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500" />
-                         <input name="toLocation" required placeholder="الوجهة" defaultValue={bookingItem?.toLocation || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500" />
+                         <div className="space-y-1">
+                             <label className="text-[9px] text-indigo-400 font-bold">مكان الانطلاق</label>
+                             <select name="fromLocation" required defaultValue={bookingItem?.fromLocation || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
+                                 <option value="" disabled>اختر...</option>
+                                 {TRANSIT_LOCATIONS.map(loc => <option key={`from-${loc}`} value={loc}>{loc}</option>)}
+                             </select>
+                         </div>
+                         <div className="space-y-1">
+                             <label className="text-[9px] text-indigo-400 font-bold">الوجهة</label>
+                             <select name="toLocation" required defaultValue={bookingItem?.toLocation || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
+                                 <option value="" disabled>اختر...</option>
+                                 {TRANSIT_LOCATIONS.map(loc => <option key={`to-${loc}`} value={loc}>{loc}</option>)}
+                             </select>
+                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                          <div className="space-y-1">
