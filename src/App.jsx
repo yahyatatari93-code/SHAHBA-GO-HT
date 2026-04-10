@@ -9,7 +9,7 @@ import {
   UserCheck, UserX, ClipboardList, Trash2,
   RotateCcw, Baby, Tent, Ship,
   PartyPopper, Plane, FileText, Globe, CarFront,
-  Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock, Download, Share, MoreVertical, BellRing, Phone, QrCode, Printer
+  Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock, Download, Share, MoreVertical, BellRing, Phone, QrCode, Printer, Wifi, Utensils
 } from 'lucide-react';
 
 // ==========================================
@@ -28,7 +28,14 @@ const ADMIN_ACCOUNTS = [
 ];
 
 // 🛑 خيارات النقل البري 🛑
-const TRANSIT_LOCATIONS = ['حلب', 'دمشق', 'اللاذقية', 'بيروت', 'مطار حلب', 'مطار دمشق'];
+const TRANSIT_LOCATIONS = ['حلب', 'دمشق', 'اللاذقية', 'بيروت', 'عمان', 'مطار حلب', 'مطار دمشق'];
+
+const TRANSIT_VEHICLES = [
+  { id: 'standard', name: 'سيارة عادية', icon: Car, desc: 'سفر مريح واقتصادي 🚗' },
+  { id: 'suv', name: 'سيارة جيب', icon: CarFront, desc: 'مساحة أوسع ورفاهية عالية 🚙' },
+  { id: 'van', name: 'فان', icon: Bus, desc: 'عائلية تتسع لـ 7 ركاب 🚐' },
+  { id: 'microbus', name: 'ميكرو باص', icon: Bus, desc: 'للمجموعات حتى 10 ركاب 🚌' }
+];
 
 // --- HT Custom Logo Component ---
 const HTLogo = ({ size = "normal" }) => {
@@ -107,8 +114,8 @@ const PUBLIC_SERVICES_LIST = [
 ];
 
 const DEFAULT_CARS = [
-  { id: 'audi', name: 'Audi A6', price: '750,000 ل.س/يوم', img: 'https://images.unsplash.com/photo-1614162692292-7ac56d7f7f1e?q=80&w=400' },
-  { id: 'genesis', name: 'Genesis G80', price: '900,000 ل.س/يوم', img: 'https://images.unsplash.com/photo-1619767886558-efdc259cde1a?q=80&w=400' },
+  { id: 'audi', name: 'Audi A6', price: '750,000 ل.س', img: 'https://images.unsplash.com/photo-1614162692292-7ac56d7f7f1e?q=80&w=400' },
+  { id: 'genesis', name: 'Genesis G80', price: '900,000 ل.س', img: 'https://images.unsplash.com/photo-1619767886558-efdc259cde1a?q=80&w=400' },
 ];
 
 const BUS_TYPES = [
@@ -154,7 +161,6 @@ export default function App() {
     }).format(new Date(timestamp));
   };
 
-  // 🌟 استخراج تاريخ اليوم بصيغة YYYY-MM-DD لتقييد تواريخ الحجز 🌟
   const getTodayDateString = () => {
     const d = new Date();
     const month = `${d.getMonth() + 1}`.padStart(2, '0');
@@ -200,6 +206,40 @@ export default function App() {
   });
 
   const [printingOrder, setPrintingOrder] = useState(null); 
+  
+  // حالات السيارات والنقل البري
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [invoicePreview, setInvoicePreview] = useState(null);
+
+  // 🌟 حالة مخصصة لحساب التكلفة المباشرة لخدمة النقل البري
+  const [transitLive, setTransitLive] = useState({
+      from: '', to: '', pax: '1', bags: '0', meal: false, internet: false, extra: false
+  });
+
+  // حساب سعر النقل البري التلقائي
+  const calculateLiveTransitPrice = () => {
+      let base = 0;
+      if (transitLive.from && transitLive.to) base = 75; // السعر الافتراضي المتفق عليه
+      if (base === 0) return 0;
+
+      let paxMultiplier = 1;
+      if (bookingItem?.vehicleId === 'standard' || bookingItem?.vehicleId === 'suv') {
+          if (transitLive.pax === '2') paxMultiplier = 2;
+          else if (transitLive.pax === 'full') paxMultiplier = 3;
+      } else {
+          // للفان والميكروباص
+          paxMultiplier = parseInt(transitLive.pax) || 1;
+      }
+
+      let total = base * paxMultiplier;
+      total += parseInt(transitLive.bags) * 10;
+      if (transitLive.meal) total += 8;
+      if (transitLive.internet) total += 7;
+      if (transitLive.extra) total += 12;
+
+      return total;
+  };
 
   const [toasts, setToasts] = useState([]);
   const addToast = (msg, type = 'info', title = '') => {
@@ -506,18 +546,54 @@ export default function App() {
   const submitBooking = async (e) => {
     e.preventDefault();
     if (!user) return;
-    const formData = new FormData(e.target);
-    const formValues = Object.fromEntries(formData.entries());
 
-    const phoneStr = formValues.phone.trim();
-    if (!/^\d{10}$/.test(phoneStr)) {
-        setPhoneError("يرجى إدخال رقم هاتف صحيح مكون من 10 أرقام (مثال: 0912345678)");
-        return; 
+    let formValues;
+
+    if (!invoicePreview) {
+        const formData = new FormData(e.target);
+        formValues = Object.fromEntries(formData.entries());
+
+        const phoneStr = formValues.phone.trim();
+        if (!/^\d{10}$/.test(phoneStr)) {
+            setPhoneError("يرجى إدخال رقم هاتف صحيح مكون من 10 أرقام (مثال: 0912345678)");
+            return; 
+        }
+        setPhoneError(""); 
+
+        localStorage.setItem('sh-user-name', formValues.name);
+        localStorage.setItem('sh-user-phone', phoneStr);
+
+        // اعتراض عملية الإرسال لآجار السيارات
+        if (selectedCategory === 'car') {
+            const basePriceStr = bookingItem.price || "0";
+            const basePrice = parseInt(basePriceStr.replace(/[^0-9]/g, '')) || 0;
+            const isWithDriver = formValues.driverOption === 'with_driver';
+            const dailyRate = isWithDriver ? basePrice * 1.25 : basePrice;
+            const daysCount = parseInt(formValues.durationCount || 7);
+            const total = dailyRate * daysCount;
+            
+            setInvoicePreview({
+                ...formValues,
+                totalPrice: total,
+                currency: 'ل.س'
+            });
+            return; 
+        }
+
+        // 🌟 اعتراض عملية الإرسال لخدمة النقل البري لإنشاء فاتورتها الخاصة 🌟
+        if (selectedCategory === 'transit') {
+            const finalPrice = calculateLiveTransitPrice();
+            setInvoicePreview({
+                ...formValues,
+                ...transitLive, // نرفق الخيارات الإضافية
+                totalPrice: finalPrice,
+                currency: '$'
+            });
+            return;
+        }
+    } else {
+        formValues = invoicePreview;
     }
-    setPhoneError(""); 
-
-    localStorage.setItem('sh-user-name', formValues.name);
-    localStorage.setItem('sh-user-phone', phoneStr);
 
     let title = bookingItem?.isEditMode && bookingItem?.serviceTitle ? bookingItem.serviceTitle : bookingItem?.name || bookingItem?.title || 'طلب خدمة';
     if (!bookingItem?.isEditMode) {
@@ -535,7 +611,9 @@ export default function App() {
       status: 'pending',
       rejectionReason: '', 
       userId: user.uid,
-      isGuest: isGuest
+      isGuest: isGuest,
+      calculatedTotal: invoicePreview ? invoicePreview.totalPrice : null,
+      calculatedCurrency: invoicePreview ? invoicePreview.currency : null
     };
 
     try {
@@ -560,10 +638,13 @@ export default function App() {
     }
     
     setBookingItem(null);
+    setInvoicePreview(null);
+    setAcceptTerms(false);
     setHasKidsState('no');
     setSelectedBusType(null);
     setSelectedHotel(null);
     setSelectedCity(null);
+    setTransitLive({ from: '', to: '', pax: '1', bags: '0', meal: false, internet: false, extra: false });
     setShowSuccessCard(true);
   };
 
@@ -649,14 +730,13 @@ export default function App() {
   const renderOrderInfo = (order) => {
     if (order.serviceType === 'reward') return `استبدال هدية (${order.pointsUsed} نقطة)`;
     if (order.serviceType === 'car') {
-       const durationLabel = order.rentDuration === 'daily' ? 'أيام' : order.rentDuration === 'weekly' ? 'أسابيع' : 'أشهر';
-       return `المدة: ${order.durationCount || 1} ${durationLabel} | السائق: ${order.driverOption === 'with_driver' ? 'مع سائق' : 'بدون'} | البدء: ${order.startDate || 'غير محدد'}`;
+       return `المدة: ${order.durationCount || order.daysCount || 7} أيام | السائق: ${order.driverOption === 'with_driver' ? 'مع سائق' : 'بدون'} | البدء: ${order.startDate || 'غير محدد'}`;
     }
     if (order.serviceType === 'hotel') return `البدء: ${order.checkIn} (${order.nightCount} ليلة)`;
     if (order.serviceType === 'bus' && order.busSubCategory === 'contract') return `${order.orgName} | باصات: ${order.busCount}`;
     if (order.serviceType === 'bus') return `ترفيهي: ${order.tripDate}`;
     if (order.serviceType === 'flights') return `من ${order.fromAirport} لـ ${order.toAirport} بتاريخ ${order.flightDate}`;
-    if (order.serviceType === 'transit') return `من ${order.fromLocation} إلى ${order.toLocation} | ${order.transitType} | حقائب: ${order.bagsCount || '1'} | موعد: ${order.tripDate} ${order.tripTime}`;
+    if (order.serviceType === 'transit') return `من ${order.fromLocation} إلى ${order.toLocation} | ركاب: ${order.pax} | حقائب: ${order.bags || '0'} | موعد: ${order.tripDate}`;
     if (order.serviceType === 'services') {
        if (order.fromCity && order.toCity) return `من: ${order.fromCity} إلى: ${order.toCity}`;
        return `الخدمة المطلوبة مسجلة`;
@@ -666,12 +746,18 @@ export default function App() {
   };
 
   const calculateEstimatedPrice = (order) => {
+      if (order.calculatedTotal) {
+          if (order.calculatedCurrency === '$') {
+              return `$${order.calculatedTotal}`;
+          }
+          return new Intl.NumberFormat('ar-SY', { style: 'currency', currency: 'SYP' }).format(order.calculatedTotal);
+      }
+
       let total = 0;
       let pax = parseInt(order.paxCount) || 1;
       let duration = parseInt(order.durationCount) || parseInt(order.nightCount) || 1;
       
       if (order.serviceType === 'hotel') total = pax * duration * 250000;
-      else if (order.serviceType === 'car') total = duration * 800000;
       else if (order.serviceType === 'transit') total = pax * 150000;
       else if (order.serviceType === 'flights') total = pax * 1200000;
       else if (order.serviceType === 'events') total = pax * 100000;
@@ -794,9 +880,11 @@ export default function App() {
 
                   <div className="border-t-2 border-dashed border-gray-200 pt-6 mb-8 flex justify-between items-end">
                       <div>
-                          <p className="text-xs text-gray-400 font-bold mb-1">المبلغ الإجمالي التقديري للدفع</p>
+                          <p className="text-xs text-gray-400 font-bold mb-1">المبلغ الإجمالي للتسديد</p>
                           <p className="text-3xl font-black text-gray-900">{calculateEstimatedPrice(printingOrder)}</p>
-                          <p className="text-[10px] text-gray-400 mt-2">*هذا المبلغ تقديري وسيتم تأكيده بشكل نهائي عند التواصل.</p>
+                          {(!printingOrder.calculatedTotal) && (
+                             <p className="text-[10px] text-gray-400 mt-2">*هذا المبلغ تقديري وسيتم تأكيده بشكل نهائي عند التواصل.</p>
+                          )}
                       </div>
                       <div className="text-center">
                           <QrCode size={64} className="text-gray-800 mx-auto mb-2"/>
@@ -821,6 +909,20 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#0B192C] text-white font-sans overflow-x-hidden pb-32" dir="rtl">
       <ToastContainer />
+
+      {showTermsModal && (
+          <div className="fixed inset-0 bg-black/95 z-[9999] flex items-center justify-center p-6">
+              <div className="bg-[#112240] w-full max-w-md p-8 rounded-[2.5rem] border border-emerald-500/30 shadow-2xl relative text-right animate-in zoom-in-95">
+                   <button type="button" onClick={() => setShowTermsModal(false)} className="absolute top-6 left-6 text-white/30 hover:text-rose-500 transition-colors"><X size={20}/></button>
+                   <h3 className="text-lg font-black text-emerald-400 mb-4 flex items-center gap-2"><FileText size={20}/> دفتر شروط آجار السيارات</h3>
+                   <div className="bg-[#0B192C] p-4 rounded-2xl h-48 overflow-y-auto text-[11px] text-white/80 leading-relaxed font-bold border border-white/5 mb-6 shadow-inner scrollbar-thin">
+                        <p className="mb-2 text-amber-400">سيتم إدراج النص القانوني الخاص بالشروط والأحكام هنا بناءً على طلب الإدارة.</p>
+                        <p>يجب على العميل الالتزام بكافة البنود المذكورة لحماية حقوق الطرفين، والتي تتضمن شروط التسليم، التأمين، وتجاوز المدة المحددة.</p>
+                   </div>
+                   <button type="button" onClick={() => { setAcceptTerms(true); setShowTermsModal(false); }} className="w-full bg-emerald-500 text-black py-4 rounded-xl font-black text-xs shadow-lg active:scale-95 transition-all">قرأت وموافق على الشروط</button>
+              </div>
+          </div>
+      )}
 
       <div className="bg-emerald-500/10 border-b border-emerald-500/20 py-2.5 overflow-hidden whitespace-nowrap sticky top-0 z-40 backdrop-blur-md">
         <div className="flex animate-marquee hover:[animation-play-state:paused] space-x-12 space-x-reverse items-center">
@@ -942,243 +1044,6 @@ export default function App() {
             )}
         </div>
       </header>
-
-      {selectedNotification && (
-          <div className="fixed inset-0 bg-black/95 z-[9500] flex items-center justify-center p-6 backdrop-blur-sm">
-             <div className="bg-[#112240] p-8 rounded-[3rem] border border-white/10 text-center shadow-2xl max-w-sm w-full animate-in zoom-in-95 relative overflow-hidden">
-                <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 border shadow-inner ${
-                    selectedNotification.type === 'error' ? 'bg-rose-500/20 text-rose-500 border-rose-500/30' :
-                    selectedNotification.type === 'success' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
-                    selectedNotification.type === 'order' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
-                    selectedNotification.type === 'special' ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.5)]' :
-                    'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                }`}>
-                    <selectedNotification.icon size={36} className="animate-pulse" />
-                </div>
-                <h3 className={`text-xl font-black mb-3 ${selectedNotification.type === 'special' ? 'text-amber-400 drop-shadow-md' : 'text-white'}`}>{selectedNotification.title}</h3>
-                
-                {!selectedNotification.orderData && (
-                    <p className="text-sm text-white/90 mb-4 font-bold leading-relaxed whitespace-pre-wrap">{selectedNotification.desc}</p>
-                )}
-                
-                {selectedNotification.orderData && selectedNotification.type === 'success' && (
-                    <div className="bg-gradient-to-br from-emerald-900/40 to-[#112240] border border-emerald-500/30 rounded-3xl p-5 mb-6 text-right shadow-lg relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 blur-2xl rounded-full pointer-events-none"></div>
-                        
-                        <div className="flex justify-between items-center mb-4 border-b border-emerald-500/20 pb-3 relative z-10">
-                            <h4 className="text-emerald-400 font-black text-sm flex items-center gap-2">
-                                <Ticket size={18}/> تذكرة الحجز
-                            </h4>
-                            <div className="bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-lg text-[9px] font-black border border-emerald-500/30">مقبول</div>
-                        </div>
-                        
-                        <div className="space-y-3 relative z-10">
-                            <div>
-                                <span className="text-white/40 text-[10px] block mb-1 font-bold">الخدمة المطلوبة</span>
-                                <span className="font-black text-white text-xs bg-black/20 p-2 rounded-xl block border border-white/5">{selectedNotification.orderData.serviceTitle}</span>
-                            </div>
-                            
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <span className="text-white/40 text-[10px] block mb-1 font-bold">الاسم</span>
-                                    <span className="font-bold text-white text-[11px] truncate block">{selectedNotification.orderData.name}</span>
-                                </div>
-                                <div>
-                                    <span className="text-white/40 text-[10px] block mb-1 font-bold">تاريخ الطلب</span>
-                                    <span className="font-bold text-white text-[11px] block">{formatDateTime(selectedNotification.orderData.createdAt)}</span>
-                                </div>
-                            </div>
-
-                            <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 flex gap-2 items-start mt-2">
-                                <Info size={16} className="text-emerald-400 shrink-0 mt-0.5" />
-                                <p className="text-[10px] text-emerald-400/90 font-bold leading-relaxed">
-                                    يرجى زيارة مركزنا أو التواصل عبر الواتساب لتأكيد الحجز النهائي واستكمال الإجراءات. شكراً لثقتك بـ HT!
-                                </p>
-                            </div>
-                            
-                            <button onClick={openWhatsApp} className="w-full mt-2 bg-emerald-500 text-black py-3 rounded-xl font-black text-xs flex items-center justify-center gap-2 hover:scale-105 transition-transform shadow-lg shadow-emerald-500/20">
-                                <MessageCircle size={16}/> تواصل معنا الآن
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {selectedNotification.orderData && selectedNotification.type === 'error' && (
-                    <div className="bg-rose-500/10 border border-rose-500/30 rounded-3xl p-5 mb-6 text-right shadow-lg relative overflow-hidden">
-                        <h4 className="text-rose-400 font-black text-sm mb-3 flex items-center gap-2 border-b border-rose-500/20 pb-3">
-                            <AlertCircle size={18}/> تفاصيل الرفض
-                        </h4>
-                        <div className="space-y-3 relative z-10">
-                            <div>
-                                <span className="text-white/40 text-[10px] block mb-1 font-bold">الخدمة المطلوبة</span>
-                                <span className="font-bold text-white text-[11px] block">{selectedNotification.orderData.serviceTitle}</span>
-                            </div>
-                            {selectedNotification.orderData.rejectionReason && (
-                               <div className="bg-rose-500/20 p-3 rounded-xl border border-rose-500/30 mt-2">
-                                  <span className="text-rose-300 text-[10px] font-black block mb-1">السبب والتعليمات:</span>
-                                  <span className="text-white text-xs leading-relaxed font-bold">{selectedNotification.orderData.rejectionReason}</span>
-                               </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {selectedNotification.orderData && selectedNotification.type === 'order' && (
-                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-5 mb-6 text-right shadow-lg relative overflow-hidden">
-                        <h4 className="text-amber-400 font-black text-sm mb-3 flex items-center gap-2 border-b border-amber-500/20 pb-3">
-                            <Ticket size={18}/> طلب حجز جديد
-                        </h4>
-                        <div className="space-y-3 relative z-10">
-                            <div>
-                                <span className="text-white/40 text-[10px] block mb-1 font-bold">الخدمة المطلوبة</span>
-                                <span className="font-bold text-white text-xs block">{selectedNotification.orderData.serviceTitle}</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3 mt-2">
-                                <div>
-                                    <span className="text-white/40 text-[10px] block mb-1 font-bold">العميل</span>
-                                    <span className="font-bold text-white text-[11px] block">{selectedNotification.orderData.name}</span>
-                                </div>
-                                <div>
-                                    <span className="text-white/40 text-[10px] block mb-1 font-bold">رقم الهاتف</span>
-                                    <span className="font-bold text-amber-400 text-[11px] block" dir="ltr">{selectedNotification.orderData.phone}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                <p className="text-[10px] text-white/30 mb-6">{formatDateTime(selectedNotification.time)}</p>
-                <button onClick={() => setSelectedNotification(null)} className={`w-full py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all ${
-                    selectedNotification.type === 'error' ? 'bg-rose-500 text-white' :
-                    selectedNotification.type === 'success' ? 'bg-emerald-500 text-black' :
-                    selectedNotification.type === 'order' ? 'bg-amber-500 text-black' :
-                    selectedNotification.type === 'special' ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-black shadow-yellow-500/30' :
-                    'bg-blue-500 text-white'
-                }`}>
-                    إغلاق
-                </button>
-             </div>
-          </div>
-      )}
-
-      {logoutConfirm && (
-        <div className="fixed inset-0 bg-black/95 z-[9000] flex items-center justify-center p-6 backdrop-blur-sm">
-           <div className="bg-[#112240] p-8 rounded-[3rem] border border-rose-500/20 text-center shadow-2xl max-w-sm w-full animate-in zoom-in-95">
-              <div className="w-20 h-20 bg-rose-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-rose-500/20">
-                  <LogOut size={32} className="text-rose-500" />
-              </div>
-              <h3 className="text-xl font-black text-white mb-2">تسجيل الخروج</h3>
-              <p className="text-xs text-white/50 mb-8 font-bold">هل أنت متأكد أن تريد تسجيل الخروج من حسابك؟</p>
-              <div className="flex gap-3">
-                 <button onClick={executeLogout} className="flex-1 bg-rose-600 py-4 rounded-2xl font-black text-xs text-white shadow-lg active:scale-95 transition-all">نعم، خروج</button>
-                 <button onClick={() => setLogoutConfirm(false)} className="flex-1 bg-white/5 py-4 rounded-2xl font-black text-xs text-white hover:bg-white/10 transition-all">تراجع</button>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {/* Auth Modal */}
-      {authModal && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[3000] flex items-center justify-center p-4">
-           <div className="bg-[#112240] w-full max-w-sm p-8 rounded-[3rem] border border-emerald-500/20 shadow-2xl relative animate-in text-center">
-              <button onClick={() => {setAuthModal(null); setOtpSent(false); setOtpCode('');}} className="absolute top-6 left-6 text-white/30 hover:text-white"><X size={20}/></button>
-              <div className="flex justify-center mb-6"><HTLogo size="large" /></div>
-              
-              <h2 className="text-xl font-black text-white mb-6">
-                  {authModal === 'login' ? 'تسجيل الدخول' : 'إنشاء حساب جديد'}
-              </h2>
-              
-              <div className="flex bg-[#0B192C] p-1 rounded-2xl mb-6 border border-white/5">
-                 <button onClick={() => {setAuthTab('email'); setAuthError(''); setOtpSent(false); setOtpCode('');}} className={`flex-1 py-2.5 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${authTab === 'email' ? 'bg-emerald-500 text-black shadow-md' : 'text-white/40 hover:text-white'}`}>
-                    <Mail size={14} /> البريد
-                 </button>
-                 <button onClick={() => {setAuthTab('phone'); setAuthError(''); setOtpSent(false); setOtpCode('');}} className={`flex-1 py-2.5 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${authTab === 'phone' ? 'bg-emerald-500 text-black shadow-md' : 'text-white/40 hover:text-white'}`}>
-                    <Phone size={14} /> الهاتف
-                 </button>
-              </div>
-
-              {authError && <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-3 rounded-xl text-xs font-bold mb-4">{authError}</div>}
-              
-              <form onSubmit={handleAction} className="space-y-4">
-                  {authTab === 'email' ? (
-                     <>
-                        <input type="email" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)} disabled={otpSent && authModal === 'signup'} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500 disabled:opacity-50" placeholder="البريد الإلكتروني (مثال: user@mail.com)" />
-                        
-                        {authModal === 'login' && (
-                            <input type="password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="كلمة المرور" />
-                        )}
-
-                        {authModal === 'signup' && otpSent && (
-                            <div className="animate-in fade-in slide-in-from-top-2 space-y-4">
-                                <input type="text" required value={otpCode} onChange={(e)=>setOtpCode(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-lg tracking-[0.5em] font-black text-white text-center outline-none focus:border-emerald-500" placeholder="123456" maxLength={6} />
-                                <p className="text-[10px] text-white/40 mb-2">(يرجى تفقد بريدك الإلكتروني)</p>
-                                <input type="password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="اختر كلمة مرور جديدة" />
-                            </div>
-                        )}
-
-                        <button type="submit" disabled={authLoading || (authModal === 'signup' && otpSent && !otpCode)} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all disabled:opacity-50 mt-2">
-                           {authLoading ? 'جاري المعالجة...' : 
-                               (authModal === 'login' ? 'دخول آمن' : 
-                                   (!otpSent ? 'إرسال رمز التحقق' : 'تأكيد وإنشاء الحساب'))}
-                        </button>
-                     </>
-                  ) : (
-                     <>
-                        {!otpSent ? (
-                           <>
-                              <div className="relative flex" dir="ltr">
-                                 <div className="bg-white/5 border border-white/10 border-r-0 rounded-l-2xl px-3 flex items-center text-white/60 font-medium text-xs">
-                                   +963
-                                 </div>
-                                 <input type="tel" required value={authPhone} onChange={(e)=>setAuthPhone(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-r-2xl py-3 px-4 text-xs text-white outline-none focus:border-emerald-500" placeholder="09xx xxx xxx" />
-                              </div>
-                              <button type="submit" disabled={authLoading || !authPhone} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all disabled:opacity-50">
-                                 {authLoading ? 'جاري الإرسال...' : 'إرسال رمز التحقق'}
-                              </button>
-                           </>
-                        ) : (
-                           <div className="animate-in fade-in slide-in-from-top-2 space-y-4">
-                              <input type="text" required value={otpCode} onChange={(e)=>setOtpCode(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-3 px-4 text-lg tracking-[0.5em] font-black text-white text-center outline-none focus:border-emerald-500" placeholder="123456" maxLength={6} />
-                              <p className="text-[10px] text-white/40">(يرجى تفقد رسائل الهاتف)</p>
-                              <button type="submit" disabled={authLoading || !otpCode} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all disabled:opacity-50 mt-2">
-                                 {authLoading ? 'جاري التأكيد...' : (authModal === 'login' ? 'تأكيد الدخول' : 'تأكيد وإنشاء الحساب')}
-                              </button>
-                           </div>
-                        )}
-                     </>
-                  )}
-              </form>
-
-              <div className="mt-6 pt-5 border-t border-white/5">
-                  {authModal === 'login' ? (
-                      <p className="text-[11px] text-white/50 font-bold">
-                          ليس لديك حساب؟ <span onClick={() => {setAuthModal('signup'); setAuthError(''); setOtpSent(false); setOtpCode('');}} className="text-emerald-400 cursor-pointer hover:underline font-black px-1 transition-all">إنشاء حساب جديد</span>
-                      </p>
-                  ) : (
-                      <p className="text-[11px] text-white/50 font-bold">
-                          لديك حساب بالفعل؟ <span onClick={() => {setAuthModal('login'); setAuthError(''); setOtpSent(false); setOtpCode('');}} className="text-emerald-400 cursor-pointer hover:underline font-black px-1 transition-all">تسجيل الدخول</span>
-                      </p>
-                  )}
-              </div>
-
-           </div>
-        </div>
-      )}
-
-      {editingCar && isUserAdmin && (
-          <div className="fixed inset-0 bg-black/95 z-[8000] flex items-center justify-center p-6 text-right">
-             <div className="bg-[#112240] w-full max-w-sm p-8 rounded-[2.5rem] border border-emerald-500/20 shadow-2xl animate-in zoom-in-95">
-                <h3 className="text-lg font-black text-emerald-400 mb-4">تعديل سعر {editingCar.name}</h3>
-                <form onSubmit={handleSaveCarPrice}>
-                    <input name="price" defaultValue={editingCar.price} required className="w-full bg-[#0B192C] border border-white/5 rounded-2xl p-4 text-xs text-white text-right outline-none focus:border-emerald-500 mb-4 shadow-inner" placeholder="السعر الجديد (مثال: 800,000 ل.س/يوم)" />
-                    <div className="flex gap-2">
-                        <button type="submit" className="flex-1 bg-emerald-500 py-3 rounded-2xl font-black text-xs text-black shadow-lg">حفظ التعديل</button>
-                        <button type="button" onClick={() => setEditingCar(null)} className="flex-1 bg-white/5 py-3 rounded-2xl font-black text-xs text-white">إلغاء</button>
-                    </div>
-                </form>
-             </div>
-          </div>
-      )}
 
       <main className="p-4 max-w-5xl mx-auto">
         {showAdminPanel && isUserAdmin ? (
@@ -1330,6 +1195,8 @@ export default function App() {
                          setSelectedHotel(null); 
                          setSelectedCity(null); 
                          setSelectedBusType(null);
+                         // تصفير حالة التكلفة المباشرة عند الدخول للقسم
+                         if(cat.id === 'transit') setTransitLive({ from: '', to: '', pax: '1', bags: '0', meal: false, internet: false, extra: false });
                      }} 
                        className={`p-5 rounded-[2.5rem] flex flex-col items-center justify-center text-center gap-3 border transition-all ${cat.active ? 'bg-white/5 border-white/10 shadow-lg hover:bg-white/10 active:scale-95' : 'opacity-40 grayscale'}`}>
                         <div className={`w-14 h-14 bg-gradient-to-br ${cat.color} rounded-2xl flex items-center justify-center text-white shadow-md`}><cat.icon size={26} /></div>
@@ -1405,36 +1272,44 @@ export default function App() {
                         </div>
                     )}
 
+                    {/* 🌟 تعديل قسم عرض النقل البري 🌟 */}
                     {selectedCategory === 'transit' && (
-                        <div className="space-y-4 animate-in fade-in">
-                            <div className="relative bg-[#112240] w-full h-[450px] rounded-[3rem] overflow-hidden shadow-2xl border border-indigo-500/20 group">
+                        <>
+                            <div className="relative bg-[#112240] w-full h-[200px] rounded-[3rem] overflow-hidden shadow-xl border border-indigo-500/20 mb-6 group animate-in fade-in">
                                 <img 
                                     src="/transit-bg.jpg" 
                                     onError={(e) => { e.target.onerror = null; e.target.src='https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=800'; }} 
                                     alt="النقل البري" 
-                                    className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-700" 
+                                    className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-700" 
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/50 to-transparent"></div>
-                                
-                                <div className="absolute inset-0 flex flex-col items-center justify-end p-6 text-center z-10 pb-10">
-                                    <div className="w-16 h-16 bg-indigo-500/20 backdrop-blur-md rounded-3xl flex items-center justify-center mb-4 border border-indigo-500/30 shadow-inner">
-                                        <CarFront size={32} className="text-indigo-400 animate-pulse" />
-                                    </div>
-                                    <h3 className="font-black text-2xl text-white mb-3 drop-shadow-md">من البيت إلى البيت</h3>
-                                    
-                                    <div className="bg-black/40 backdrop-blur-sm border border-white/10 p-4 rounded-2xl mb-6 shadow-lg max-w-xs">
-                                        <p className="text-xs text-indigo-300 leading-relaxed font-black drop-shadow-md">
-                                            نقل آمن ومريح بين المحافظات وبيروت
-                                        </p>
-                                        <p className="text-[11px] text-white font-bold mt-2">بسيارات <span className="bg-indigo-500 text-white px-2 py-0.5 rounded-md mx-1">VIP</span> عادية أو عائلية</p>
-                                    </div>
-
-                                    <button onClick={() => setBookingItem({title: 'طلب خدمة النقل البري'})} className="w-full bg-indigo-600 text-white py-4 rounded-full font-black text-sm shadow-[0_8px_30px_rgba(79,70,229,0.4)] active:scale-95 transition-all flex items-center justify-center gap-3 border border-indigo-400">
-                                        الدخول للحجز <ChevronLeft size={18} />
-                                    </button>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
+                                    <CarFront size={32} className="text-indigo-400 mb-3 animate-pulse" />
+                                    <h3 className="font-black text-2xl text-white mb-2 drop-shadow-md">خدمة النقل البري</h3>
+                                    <p className="text-xs text-white/80 font-bold drop-shadow-md">من البيت إلى البيت بأمان وراحة</p>
                                 </div>
                             </div>
-                        </div>
+
+                            <div className="grid grid-cols-1 gap-4">
+                                {TRANSIT_VEHICLES.map(vehicle => (
+                                    <button 
+                                        key={vehicle.id} 
+                                        onClick={() => {
+                                            setTransitLive({ from: '', to: '', pax: '1', bags: '0', meal: false, internet: false, extra: false });
+                                            setBookingItem({ title: `طلب حجز - ${vehicle.name}`, vehicleId: vehicle.id, isTransit: true });
+                                        }} 
+                                        className="bg-[#112240] border border-white/5 p-6 rounded-[2.5rem] flex items-center gap-4 text-right hover:bg-white/5 transition-all shadow-md group"
+                                    >
+                                        <div className="w-14 h-14 bg-indigo-500/10 rounded-2xl flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500 group-hover:text-black transition-colors shadow-inner"><vehicle.icon size={26}/></div>
+                                        <div className="flex-1">
+                                            <h4 className="font-black text-base text-white">{vehicle.name}</h4>
+                                            <p className="text-[10px] text-white/50 mt-1">{vehicle.desc}</p>
+                                        </div>
+                                        <ChevronLeft size={20} className="text-slate-500 group-hover:text-indigo-400 transition-colors"/>
+                                    </button>
+                                ))}
+                            </div>
+                        </>
                     )}
 
                     {selectedCategory === 'services' && (
@@ -1481,7 +1356,7 @@ export default function App() {
                            <div className="relative">
                                <img src={car.img} className="w-full h-44 object-cover rounded-[2rem] mb-4" alt={car.name}/>
                                <div className="absolute top-4 right-4 bg-black/80 backdrop-blur-md text-emerald-400 px-3 py-1.5 rounded-2xl font-black text-xs border border-emerald-500/30 flex items-center gap-2 shadow-lg">
-                                   {car.price}
+                                   {car.price} / يوم (بدون سائق)
                                    {isUserAdmin && (
                                        <button onClick={(e) => { e.stopPropagation(); setEditingCar(car); }} className="text-white hover:text-emerald-400 transition-colors bg-white/10 p-1 rounded-md" title="تعديل السعر">
                                            <Settings size={12}/>
@@ -1678,14 +1553,20 @@ export default function App() {
       {bookingItem && (
         <div className="fixed inset-0 bg-black/95 z-[1000] flex items-center justify-center p-4">
            <div className="bg-[#112240] w-full max-w-md p-6 rounded-[3rem] border border-white/10 relative overflow-y-auto max-h-[95vh] shadow-2xl">
-              <button onClick={() => {setBookingItem(null); setHasKidsState('no');}} className="absolute top-6 left-6 text-white/20 hover:text-rose-500 transition-colors"><X size={20}/></button>
+              <button onClick={() => {
+                  setBookingItem(null); 
+                  setHasKidsState('no');
+                  setInvoicePreview(null);
+                  setAcceptTerms(false);
+                  setTransitLive({ from: '', to: '', pax: '1', bags: '0', meal: false, internet: false, extra: false });
+              }} className="absolute top-6 left-6 text-white/20 hover:text-rose-500 transition-colors"><X size={20}/></button>
               
               <div className="text-right mb-6">
                  <h3 className="text-xl font-black text-white">{bookingItem?.isEditMode ? 'تعديل الطلب' : 'إكمال بيانات الحجز'}</h3>
                  <p className="text-[10px] text-emerald-400 font-bold mt-1 uppercase tracking-widest">{bookingItem.name || bookingItem.title || bookingItem.serviceTitle}</p>
               </div>
 
-              {selectedCategory === 'events' && bookingItem?.desc && (
+              {selectedCategory === 'events' && bookingItem?.desc && !invoicePreview && (
                   <div className="bg-[#0B192C] border border-emerald-500/20 p-4 rounded-2xl mb-6 text-right shadow-inner">
                       <h4 className="text-xs font-black text-emerald-400 mb-2 flex items-center gap-1.5">
                           <Info size={14}/> تفاصيل الرحلة / العرض
@@ -1704,245 +1585,359 @@ export default function App() {
                   </div>
               )}
 
-              <form onSubmit={submitBooking} className="space-y-4 text-right">
+              <form onSubmit={submitBooking} className="text-right flex flex-col h-full">
                  
-                 <div className="grid grid-cols-2 gap-4">
-                    <input name="name" required defaultValue={bookingItem?.isEditMode ? bookingItem.name : ""} className="w-full bg-[#0B192C] border border-white/5 rounded-2xl p-4 text-xs text-white text-right outline-none focus:border-emerald-500 shadow-inner" placeholder="الاسم الكامل" />
-                    <div>
-                        <input name="phone" required defaultValue={bookingItem?.isEditMode ? bookingItem.phone : (localStorage.getItem('sh-user-phone') || "")} className={`w-full bg-[#0B192C] border rounded-2xl p-4 text-xs text-left outline-none shadow-inner ${phoneError ? 'border-rose-500 text-rose-400' : 'border-white/5 text-white focus:border-emerald-500'}`} placeholder="09xxxxxx" />
-                    </div>
-                 </div>
-                 {phoneError && <p className="text-[9px] text-rose-400 font-bold bg-rose-500/10 p-2 rounded-lg border border-rose-500/20">{phoneError}</p>}
-
-                 {selectedCategory === 'hotel' && (
-                   <div className="space-y-3 p-4 bg-amber-500/5 rounded-3xl border border-amber-500/10">
-                      <div className="bg-amber-500/10 p-2 rounded-xl text-amber-400 text-[9px] font-bold text-center flex justify-center items-center gap-1"><Info size={12}/> الاستلام والتسليم الساعة 11 صباحاً</div>
-                      
-                      <div className="grid grid-cols-2 gap-3">
-                         <div className="space-y-1 text-right">
-                            <label className="text-[9px] text-amber-500/50 mr-2 font-bold">عدد الليالي</label>
-                            <input name="nightCount" type="number" min="1" required defaultValue={bookingItem?.nightCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500 shadow-inner" placeholder="مثال: 3" />
-                         </div>
-                         <div className="space-y-1 text-right">
-                            <label className="text-[9px] text-amber-500/50 mr-2 font-bold">تاريخ البدء</label>
-                            {/* تم إضافة min لمنع تواريخ الماضي */}
-                            <input name="checkIn" type="date" min={todayDate} required defaultValue={bookingItem?.checkIn || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-amber-500" />
-                         </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                         <div className="space-y-1 text-right">
-                            <label className="text-[9px] text-amber-500/50 mr-2 font-bold">عدد الأشخاص (بالغين)</label>
-                            <input name="paxCount" type="number" min="1" required defaultValue={bookingItem?.paxCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500 shadow-inner" placeholder="العدد" />
-                         </div>
-                         <div className="space-y-1 text-right">
-                            <label className="text-[9px] text-amber-500/50 mr-2 font-bold">مرافقة أطفال؟</label>
-                            <select name="hasKids" required value={hasKidsState} onChange={(e) => setHasKidsState(e.target.value)} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500 appearance-none">
-                               <option value="no">لا يوجد أطفال</option>
-                               <option value="yes">يوجد أطفال</option>
-                            </select>
-                         </div>
-                      </div>
-
-                      {hasKidsState === 'yes' && (
-                         <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
-                            <div className="space-y-1 text-right">
-                               <label className="text-[9px] text-amber-500/50 mr-2 font-bold">عدد الأطفال</label>
-                               <input name="kidsCount" type="number" min="1" required defaultValue={bookingItem?.kidsCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500 shadow-inner" placeholder="العدد" />
+                 {!invoicePreview && (
+                     <div className="space-y-4">
+                         <div className="grid grid-cols-2 gap-4">
+                            <input name="name" required defaultValue={bookingItem?.isEditMode ? bookingItem.name : ""} className="w-full bg-[#0B192C] border border-white/5 rounded-2xl p-4 text-xs text-white text-right outline-none focus:border-emerald-500 shadow-inner" placeholder="الاسم الكامل" />
+                            <div>
+                                <input name="phone" required defaultValue={bookingItem?.isEditMode ? bookingItem.phone : (localStorage.getItem('sh-user-phone') || "")} className={`w-full bg-[#0B192C] border rounded-2xl p-4 text-xs text-left outline-none shadow-inner ${phoneError ? 'border-rose-500 text-rose-400' : 'border-white/5 text-white focus:border-emerald-500'}`} placeholder="09xxxxxx" />
                             </div>
-                            <div className="space-y-1 text-right">
-                               <label className="text-[9px] text-amber-500/50 mr-2 font-bold">أعمار الأطفال</label>
-                               <select name="kidsAges" required defaultValue={bookingItem?.kidsAges || "أقل من 6 سنوات"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500 appearance-none">
-                                  <option value="أقل من 6 سنوات">أقل من 6 سنوات</option>
-                                  <option value="بين 6 و 12 سنة">بين 6 و 12 سنة</option>
+                         </div>
+                         {phoneError && <p className="text-[9px] text-rose-400 font-bold bg-rose-500/10 p-2 rounded-lg border border-rose-500/20">{phoneError}</p>}
+
+                         {selectedCategory === 'hotel' && (
+                           <div className="space-y-3 p-4 bg-amber-500/5 rounded-3xl border border-amber-500/10">
+                              <div className="bg-amber-500/10 p-2 rounded-xl text-amber-400 text-[9px] font-bold text-center flex justify-center items-center gap-1"><Info size={12}/> الاستلام والتسليم الساعة 11 صباحاً</div>
+                              
+                              <div className="grid grid-cols-2 gap-3">
+                                 <div className="space-y-1 text-right">
+                                    <label className="text-[9px] text-amber-500/50 mr-2 font-bold">عدد الليالي</label>
+                                    <input name="nightCount" type="number" min="1" required defaultValue={bookingItem?.nightCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500 shadow-inner" placeholder="مثال: 3" />
+                                 </div>
+                                 <div className="space-y-1 text-right">
+                                    <label className="text-[9px] text-amber-500/50 mr-2 font-bold">تاريخ البدء</label>
+                                    <input name="checkIn" type="date" min={todayDate} required defaultValue={bookingItem?.checkIn || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-amber-500" />
+                                 </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3">
+                                 <div className="space-y-1 text-right">
+                                    <label className="text-[9px] text-amber-500/50 mr-2 font-bold">عدد الأشخاص (بالغين)</label>
+                                    <input name="paxCount" type="number" min="1" required defaultValue={bookingItem?.paxCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500 shadow-inner" placeholder="العدد" />
+                                 </div>
+                                 <div className="space-y-1 text-right">
+                                    <label className="text-[9px] text-amber-500/50 mr-2 font-bold">مرافقة أطفال؟</label>
+                                    <select name="hasKids" required value={hasKidsState} onChange={(e) => setHasKidsState(e.target.value)} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500 appearance-none">
+                                       <option value="no">لا يوجد أطفال</option>
+                                       <option value="yes">يوجد أطفال</option>
+                                    </select>
+                                 </div>
+                              </div>
+
+                              {hasKidsState === 'yes' && (
+                                 <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
+                                    <div className="space-y-1 text-right">
+                                       <label className="text-[9px] text-amber-500/50 mr-2 font-bold">عدد الأطفال</label>
+                                       <input name="kidsCount" type="number" min="1" required defaultValue={bookingItem?.kidsCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500 shadow-inner" placeholder="العدد" />
+                                    </div>
+                                    <div className="space-y-1 text-right">
+                                       <label className="text-[9px] text-amber-500/50 mr-2 font-bold">أعمار الأطفال</label>
+                                       <select name="kidsAges" required defaultValue={bookingItem?.kidsAges || "أقل من 6 سنوات"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-amber-500 appearance-none">
+                                          <option value="أقل من 6 سنوات">أقل من 6 سنوات</option>
+                                          <option value="بين 6 و 12 سنة">بين 6 و 12 سنة</option>
+                                       </select>
+                                    </div>
+                                 </div>
+                              )}
+                           </div>
+                         )}
+
+                         {selectedCategory === 'flights' && (
+                           <div className="space-y-3 p-4 bg-cyan-500/5 rounded-3xl border border-cyan-500/10">
+                              <div className="grid grid-cols-2 gap-3">
+                                 <input name="fromAirport" required placeholder="من مطار..." defaultValue={bookingItem?.fromAirport || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-cyan-500" />
+                                 <input name="toAirport" required placeholder="إلى مطار..." defaultValue={bookingItem?.toAirport || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-cyan-500" />
+                              </div>
+                              <div className="space-y-1">
+                                 <label className="text-[9px] text-cyan-500/50 mr-2">تاريخ الرحلة</label>
+                                 <input name="flightDate" type="date" min={todayDate} required defaultValue={bookingItem?.flightDate || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-cyan-500" />
+                              </div>
+                           </div>
+                         )}
+
+                         {/* 🌟 تعديلات نموذج النقل البري 🌟 */}
+                         {selectedCategory === 'transit' && (
+                           <div className="space-y-3 p-4 bg-indigo-500/5 rounded-3xl border border-indigo-500/10">
+                              <div className="bg-indigo-500/10 p-3 rounded-xl border border-indigo-500/20 flex justify-between items-center mb-2">
+                                 <span className="text-xs text-indigo-400 font-bold">التكلفة التقديرية الحية:</span>
+                                 <span className="text-lg font-black text-white">${calculateLiveTransitPrice()}</span>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3">
+                                 <div className="space-y-1 text-right">
+                                     <label className="text-[9px] text-indigo-400 font-bold">مكان الانطلاق</label>
+                                     <select name="fromLocation" required value={transitLive.from} onChange={e => setTransitLive({...transitLive, from: e.target.value})} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
+                                         <option value="" disabled>اختر...</option>
+                                         {TRANSIT_LOCATIONS.map(loc => <option key={`from-${loc}`} value={loc}>{loc}</option>)}
+                                     </select>
+                                 </div>
+                                 <div className="space-y-1 text-right">
+                                     <label className="text-[9px] text-indigo-400 font-bold">الوجهة</label>
+                                     <select name="toLocation" required value={transitLive.to} onChange={e => setTransitLive({...transitLive, to: e.target.value})} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
+                                         <option value="" disabled>اختر...</option>
+                                         {TRANSIT_LOCATIONS.map(loc => <option key={`to-${loc}`} value={loc}>{loc}</option>)}
+                                     </select>
+                                 </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3">
+                                 <div className="space-y-1 text-right">
+                                    <label className="text-[9px] text-indigo-500/50 mr-2 font-bold">تاريخ الرحلة</label>
+                                    <input name="tripDate" type="date" min={todayDate} required defaultValue={bookingItem?.tripDate || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-indigo-500" />
+                                 </div>
+                                 <div className="space-y-1 text-right">
+                                    <label className="text-[9px] text-indigo-500/50 mr-2 font-bold">توقيت الرحلة</label>
+                                    <input name="tripTime" type="time" required defaultValue={bookingItem?.tripTime || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-indigo-500" />
+                                 </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3">
+                                  <div className="space-y-1 text-right">
+                                      <label className="text-[9px] text-indigo-500/50 mr-2 font-bold">عدد الركاب</label>
+                                      <select name="pax" required value={transitLive.pax} onChange={e => setTransitLive({...transitLive, pax: e.target.value})} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
+                                         {(bookingItem?.vehicleId === 'standard' || bookingItem?.vehicleId === 'suv') ? (
+                                             <>
+                                                <option value="1">راكب واحد</option>
+                                                <option value="2">راكبين (السعر x2)</option>
+                                                <option value="full">سيارة كاملة (السعر x3)</option>
+                                             </>
+                                         ) : bookingItem?.vehicleId === 'van' ? (
+                                             [1,2,3,4,5,6,7].map(num => <option key={num} value={num}>{num} راكب (السعر x{num})</option>)
+                                         ) : (
+                                             [1,2,3,4,5,6,7,8,9,10].map(num => <option key={num} value={num}>{num} راكب (السعر x{num})</option>)
+                                         )}
+                                      </select>
+                                  </div>
+                                  <div className="space-y-1 text-right">
+                                      <label className="text-[9px] text-indigo-500/50 mr-2 font-bold">عدد الحقائب (+$10 لكل حقيبة)</label>
+                                      <select name="bags" required value={transitLive.bags} onChange={e => setTransitLive({...transitLive, bags: e.target.value})} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
+                                         <option value="0">لا يوجد</option>
+                                         <option value="1">1</option>
+                                         <option value="2">2</option>
+                                         <option value="3">3</option>
+                                      </select>
+                                  </div>
+                              </div>
+
+                              <div className="pt-2">
+                                 <label className="text-[9px] text-indigo-500/50 font-bold block mb-2">خدمات إضافية (اختياري)</label>
+                                 <div className="grid grid-cols-3 gap-2">
+                                    <label className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all cursor-pointer ${transitLive.meal ? 'bg-indigo-500 border-indigo-400 text-white' : 'bg-[#0B192C] border-white/10 text-white/50 hover:border-indigo-500/50'}`}>
+                                        <input type="checkbox" name="meal" checked={transitLive.meal} onChange={e => setTransitLive({...transitLive, meal: e.target.checked})} className="hidden"/>
+                                        <Utensils size={14}/>
+                                        <span className="text-[9px] font-black">وجبة (8$)</span>
+                                    </label>
+                                    <label className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all cursor-pointer ${transitLive.internet ? 'bg-indigo-500 border-indigo-400 text-white' : 'bg-[#0B192C] border-white/10 text-white/50 hover:border-indigo-500/50'}`}>
+                                        <input type="checkbox" name="internet" checked={transitLive.internet} onChange={e => setTransitLive({...transitLive, internet: e.target.checked})} className="hidden"/>
+                                        <Wifi size={14}/>
+                                        <span className="text-[9px] font-black">إنترنت (7$)</span>
+                                    </label>
+                                    <label className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all cursor-pointer ${transitLive.extra ? 'bg-indigo-500 border-indigo-400 text-white' : 'bg-[#0B192C] border-white/10 text-white/50 hover:border-indigo-500/50'}`}>
+                                        <input type="checkbox" name="extra" checked={transitLive.extra} onChange={e => setTransitLive({...transitLive, extra: e.target.checked})} className="hidden"/>
+                                        <MapPin size={14}/>
+                                        <span className="text-[9px] font-black text-center leading-tight">تنقلات (12$)</span>
+                                    </label>
+                                 </div>
+                              </div>
+                           </div>
+                         )}
+
+                         {selectedCategory === 'services' && (
+                           <div className="space-y-3 p-4 bg-slate-500/5 rounded-3xl border border-slate-500/10">
+                              {bookingItem?.id === 'mail' && (
+                                 <div className="grid grid-cols-2 gap-3 mb-2">
+                                     <div className="space-y-1 text-right">
+                                         <label className="text-[9px] text-slate-400 font-bold">من مدينة</label>
+                                         <input name="fromCity" required placeholder="مثال: حلب" defaultValue={bookingItem?.fromCity || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-slate-500 shadow-inner" />
+                                     </div>
+                                     <div className="space-y-1 text-right">
+                                         <label className="text-[9px] text-slate-400 font-bold">إلى مدينة</label>
+                                         <input name="toCity" required placeholder="مثال: دمشق" defaultValue={bookingItem?.toCity || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-slate-500 shadow-inner" />
+                                     </div>
+                                 </div>
+                              )}
+                              <label className="text-[9px] text-slate-400 font-bold">يرجى كتابة التفاصيل الدقيقة للمعاملة أو الأوراق:</label>
+                              <textarea name="serviceDetails" required defaultValue={bookingItem?.serviceDetails || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right h-24 outline-none focus:border-slate-500" placeholder="تفاصيل الخدمة المطلوبة..."></textarea>
+                           </div>
+                         )}
+
+                         {selectedCategory === 'bus' && selectedBusType === 'contract' && (
+                           <div className="space-y-3 p-4 bg-blue-500/5 rounded-3xl border border-blue-500/10">
+                              <input name="orgName" required placeholder="اسم المدرسة / المعمل" defaultValue={bookingItem?.orgName || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-blue-500" />
+                              <div className="grid grid-cols-2 gap-3">
+                                 <div className="space-y-1 text-right">
+                                    <label className="text-[9px] text-white/30 mr-2">بداية الدوام</label>
+                                    <input name="startTime" type="time" required defaultValue={bookingItem?.startTime || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-blue-500" />
+                                 </div>
+                                 <div className="space-y-1 text-right">
+                                    <label className="text-[9px] text-white/30 mr-2">نهاية الدوام</label>
+                                    <input name="endTime" type="time" required defaultValue={bookingItem?.endTime || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-blue-500" />
+                                 </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                 <input name="workerCount" type="number" min="1" placeholder="عدد العمال/الطلاب" required defaultValue={bookingItem?.workerCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-blue-500" />
+                                 <input name="busCount" type="number" min="1" placeholder="كم باص؟" required defaultValue={bookingItem?.busCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-blue-500" />
+                              </div>
+                           </div>
+                         )}
+
+                         {selectedCategory === 'bus' && selectedBusType === 'leisure' && (
+                           <div className="space-y-3 p-4 bg-emerald-500/5 rounded-3xl border border-emerald-500/10">
+                              <div className="grid grid-cols-2 gap-3">
+                                 <div className="space-y-1">
+                                   <label className="text-[9px] text-white/30 mr-2">تاريخ الرحلة</label>
+                                   <input name="tripDate" type="date" min={todayDate} required defaultValue={bookingItem?.tripDate || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-emerald-500" />
+                                 </div>
+                                 <div className="space-y-1">
+                                   <label className="text-[9px] text-white/30 mr-2">وقت الانطلاق</label>
+                                   <input name="tripTime" type="time" required defaultValue={bookingItem?.tripTime || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-emerald-500" />
+                                 </div>
+                              </div>
+                           </div>
+                         )}
+
+                         {selectedCategory === 'events' && (
+                            <div className="grid grid-cols-2 gap-3 bg-rose-500/5 p-5 rounded-3xl border border-rose-500/10">
+                               <input name="paxCount" type="number" min="1" placeholder="عدد الأشخاص" required defaultValue={bookingItem?.paxCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-rose-500" />
+                               <select name="hasKids" required defaultValue={bookingItem?.hasKids || "no"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-rose-500 appearance-none">
+                                  <option value="no">لا يوجد أطفال</option>
+                                  <option value="yes">نعم، يوجد أطفال</option>
                                </select>
                             </div>
-                         </div>
-                      )}
-                   </div>
-                 )}
+                         )}
 
-                 {selectedCategory === 'flights' && (
-                   <div className="space-y-3 p-4 bg-cyan-500/5 rounded-3xl border border-cyan-500/10">
-                      <div className="grid grid-cols-2 gap-3">
-                         <input name="fromAirport" required placeholder="من مطار..." defaultValue={bookingItem?.fromAirport || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-cyan-500" />
-                         <input name="toAirport" required placeholder="إلى مطار..." defaultValue={bookingItem?.toAirport || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-cyan-500" />
-                      </div>
-                      <div className="space-y-1">
-                         <label className="text-[9px] text-cyan-500/50 mr-2">تاريخ الرحلة</label>
-                         {/* تم إضافة min لمنع تواريخ الماضي */}
-                         <input name="flightDate" type="date" min={todayDate} required defaultValue={bookingItem?.flightDate || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-cyan-500" />
-                      </div>
-                   </div>
-                 )}
+                         {selectedCategory === 'car' && (
+                            <div className="space-y-3 p-4 bg-emerald-500/5 rounded-3xl border border-emerald-500/10">
+                                <div className="grid grid-cols-1 gap-3">
+                                    <div className="space-y-1 text-right">
+                                        <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">عدد الأيام (الحد الأدنى 7 أيام)</label>
+                                        <input name="durationCount" type="number" min="7" max="180" required defaultValue={bookingItem?.isEditMode ? bookingItem.durationCount : "7"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-emerald-500 shadow-inner" placeholder="أدخل عدد الأيام..." />
+                                    </div>
+                                </div>
 
-                 {selectedCategory === 'transit' && (
-                   <div className="space-y-3 p-4 bg-indigo-500/5 rounded-3xl border border-indigo-500/10">
-                      <div className="grid grid-cols-2 gap-3">
-                         <div className="space-y-1">
-                             <label className="text-[9px] text-indigo-400 font-bold">مكان الانطلاق</label>
-                             <select name="fromLocation" required defaultValue={bookingItem?.fromLocation || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
-                                 <option value="" disabled>اختر...</option>
-                                 {TRANSIT_LOCATIONS.map(loc => <option key={`from-${loc}`} value={loc}>{loc}</option>)}
-                             </select>
-                         </div>
-                         <div className="space-y-1">
-                             <label className="text-[9px] text-indigo-400 font-bold">الوجهة</label>
-                             <select name="toLocation" required defaultValue={bookingItem?.toLocation || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
-                                 <option value="" disabled>اختر...</option>
-                                 {TRANSIT_LOCATIONS.map(loc => <option key={`to-${loc}`} value={loc}>{loc}</option>)}
-                             </select>
-                         </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                         <div className="space-y-1">
-                            <label className="text-[9px] text-indigo-500/50 mr-2">تاريخ الرحلة</label>
-                            {/* تم إضافة min لمنع تواريخ الماضي */}
-                            <input name="tripDate" type="date" min={todayDate} required defaultValue={bookingItem?.tripDate || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-indigo-500" />
-                         </div>
-                         <div className="space-y-1">
-                            <label className="text-[9px] text-indigo-500/50 mr-2">توقيت الرحلة</label>
-                            <input name="tripTime" type="time" required defaultValue={bookingItem?.tripTime || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-indigo-500" />
-                         </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1 text-right">
-                              <label className="text-[9px] text-indigo-500/50 mr-2 font-bold">عدد الركاب</label>
-                              <select name="transitType" required defaultValue={bookingItem?.transitType || "راكب واحد"} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
-                                 <option value="راكب واحد">راكب واحد</option>
-                                 <option value="راكبين">راكبين</option>
-                                 <option value="سيارة كاملة">سيارة كاملة</option>
-                              </select>
-                          </div>
-                          <div className="space-y-1 text-right">
-                              <label className="text-[9px] text-indigo-500/50 mr-2 font-bold">عدد الحقائب</label>
-                              <select name="bagsCount" required defaultValue={bookingItem?.bagsCount || "1"} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-indigo-500 appearance-none">
-                                 <option value="1">1</option>
-                                 <option value="2">2</option>
-                                 <option value="3">3</option>
-                              </select>
-                          </div>
-                      </div>
-                   </div>
-                 )}
-
-                 {selectedCategory === 'services' && (
-                   <div className="space-y-3 p-4 bg-slate-500/5 rounded-3xl border border-slate-500/10">
-                      {bookingItem?.id === 'mail' && (
-                         <div className="grid grid-cols-2 gap-3 mb-2">
-                             <div className="space-y-1 text-right">
-                                 <label className="text-[9px] text-slate-400 font-bold">من مدينة</label>
-                                 <input name="fromCity" required placeholder="مثال: حلب" defaultValue={bookingItem?.fromCity || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-slate-500 shadow-inner" />
-                             </div>
-                             <div className="space-y-1 text-right">
-                                 <label className="text-[9px] text-slate-400 font-bold">إلى مدينة</label>
-                                 <input name="toCity" required placeholder="مثال: دمشق" defaultValue={bookingItem?.toCity || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-slate-500 shadow-inner" />
-                             </div>
-                         </div>
-                      )}
-                      <label className="text-[9px] text-slate-400 font-bold">يرجى كتابة التفاصيل الدقيقة للمعاملة أو الأوراق:</label>
-                      <textarea name="serviceDetails" required defaultValue={bookingItem?.serviceDetails || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right h-24 outline-none focus:border-slate-500" placeholder="تفاصيل الخدمة المطلوبة..."></textarea>
-                   </div>
-                 )}
-
-                 {selectedCategory === 'bus' && selectedBusType === 'contract' && (
-                   <div className="space-y-3 p-4 bg-blue-500/5 rounded-3xl border border-blue-500/10">
-                      <input name="orgName" required placeholder="اسم المدرسة / المعمل" defaultValue={bookingItem?.orgName || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-blue-500" />
-                      <div className="grid grid-cols-2 gap-3">
-                         <div className="space-y-1 text-right">
-                            <label className="text-[9px] text-white/30 mr-2">بداية الدوام</label>
-                            <input name="startTime" type="time" required defaultValue={bookingItem?.startTime || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-blue-500" />
-                         </div>
-                         <div className="space-y-1 text-right">
-                            <label className="text-[9px] text-white/30 mr-2">نهاية الدوام</label>
-                            <input name="endTime" type="time" required defaultValue={bookingItem?.endTime || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-blue-500" />
-                         </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                         <input name="workerCount" type="number" min="1" placeholder="عدد العمال/الطلاب" required defaultValue={bookingItem?.workerCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-blue-500" />
-                         <input name="busCount" type="number" min="1" placeholder="كم باص؟" required defaultValue={bookingItem?.busCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-blue-500" />
-                      </div>
-                   </div>
-                 )}
-
-                 {selectedCategory === 'bus' && selectedBusType === 'leisure' && (
-                   <div className="space-y-3 p-4 bg-emerald-500/5 rounded-3xl border border-emerald-500/10">
-                      <div className="grid grid-cols-2 gap-3">
-                         <div className="space-y-1">
-                           <label className="text-[9px] text-white/30 mr-2">تاريخ الرحلة</label>
-                           {/* تم إضافة min لمنع تواريخ الماضي */}
-                           <input name="tripDate" type="date" min={todayDate} required defaultValue={bookingItem?.tripDate || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-emerald-500" />
-                         </div>
-                         <div className="space-y-1">
-                           <label className="text-[9px] text-white/30 mr-2">وقت الانطلاق</label>
-                           <input name="tripTime" type="time" required defaultValue={bookingItem?.tripTime || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-emerald-500" />
-                         </div>
-                      </div>
-                   </div>
-                 )}
-
-                 {selectedCategory === 'events' && (
-                    <div className="grid grid-cols-2 gap-3 bg-rose-500/5 p-5 rounded-3xl border border-rose-500/10">
-                       <input name="paxCount" type="number" min="1" placeholder="عدد الأشخاص" required defaultValue={bookingItem?.paxCount || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-rose-500" />
-                       <select name="hasKids" required defaultValue={bookingItem?.hasKids || "no"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-rose-500 appearance-none">
-                          <option value="no">لا يوجد أطفال</option>
-                          <option value="yes">نعم، يوجد أطفال</option>
-                       </select>
-                    </div>
-                 )}
-
-                 {selectedCategory === 'car' && (
-                    <div className="space-y-3 p-4 bg-emerald-500/5 rounded-3xl border border-emerald-500/10">
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1 text-right">
-                                <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">المدة</label>
-                                <select name="rentDuration" required defaultValue={bookingItem?.rentDuration || "daily"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-emerald-500 appearance-none">
-                                    <option value="daily">يومي</option>
-                                    <option value="weekly">أسبوعي</option>
-                                    <option value="monthly">شهري</option>
-                                </select>
+                                <div className="grid grid-cols-2 gap-3">
+                                   <div className="space-y-1 text-right">
+                                       <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">السائق (+25% تكلفة إضافية)</label>
+                                       <select name="driverOption" required defaultValue={bookingItem?.isEditMode ? bookingItem.driverOption : "without_driver"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-emerald-500 appearance-none">
+                                           <option value="without_driver">بدون سائق</option>
+                                           <option value="with_driver">مع سائق (+25%)</option>
+                                       </select>
+                                   </div>
+                                   <div className="space-y-1 text-right">
+                                       <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">تاريخ البدء</label>
+                                       <input name="startDate" type="date" min={todayDate} required defaultValue={bookingItem?.startDate || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-emerald-500" />
+                                   </div>
+                                </div>
                             </div>
-                            <div className="space-y-1 text-right">
-                                <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">عدد الأيام</label>
-                                <input name="durationCount" type="number" min="1" required defaultValue={bookingItem?.durationCount || "1"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-emerald-500 shadow-inner" placeholder="مثال: 3" />
-                            </div>
-                        </div>
+                         )}
 
-                        <div className="grid grid-cols-2 gap-3">
-                           <div className="space-y-1 text-right">
-                               <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">السائق</label>
-                               <select name="driverOption" required defaultValue={bookingItem?.driverOption || "with_driver"} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-white text-right outline-none focus:border-emerald-500 appearance-none">
-                                   <option value="with_driver">مع سائق</option>
-                                   <option value="without_driver">بدون سائق</option>
-                               </select>
-                           </div>
-                           <div className="space-y-1 text-right">
-                               <label className="text-[9px] text-emerald-500/50 mr-2 font-bold">تاريخ البدء</label>
-                               {/* تم إضافة min لمنع تواريخ الماضي */}
-                               <input name="startDate" type="date" min={todayDate} required defaultValue={bookingItem?.startDate || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-emerald-500" />
-                           </div>
-                        </div>
-                    </div>
+                         <div className="pt-4 border-t border-white/5 space-y-3">
+                            <p className="text-[9px] font-black text-white/40 uppercase">اختر طريقة الدفع المفضلة</p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button type="button" onClick={() => setPaymentMethod('office')} className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${paymentMethod === 'office' ? 'bg-emerald-500 border-emerald-400 text-black shadow-lg shadow-emerald-500/20' : 'bg-[#0B192C] border-white/10 text-white/40'}`}>
+                                    <Store size={18}/>
+                                    <span className="text-[10px] font-black">الدفع بالمكتب</span>
+                                </button>
+                                <button type="button" onClick={() => setPaymentMethod('cham_cash')} className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${paymentMethod === 'cham_cash' ? 'bg-indigo-500 border-indigo-400 text-white shadow-lg shadow-indigo-500/20' : 'bg-[#0B192C] border-white/10 text-white/40'}`}>
+                                    <Wallet size={18}/>
+                                    <span className="text-[10px] font-black">شام كاش</span>
+                                </button>
+                            </div>
+                            {paymentMethod === 'office' && <p className="text-[8px] text-emerald-400/60 text-center mt-2 font-bold">مركزنا: حلب - محطة بغداد - مقابل المحطة</p>}
+                         </div>
+                         
+                         {selectedCategory === 'car' && (
+                             <div className="flex items-center justify-end gap-3 mt-4 bg-emerald-500/5 p-3 rounded-2xl border border-emerald-500/20">
+                                 <label className="text-[10px] text-white/80 cursor-pointer font-bold select-none">
+                                     قرأت وأوافق على <span onClick={(e) => { e.preventDefault(); setShowTermsModal(true); }} className="text-emerald-400 hover:text-emerald-300 transition-colors underline decoration-emerald-500/30 underline-offset-4">دفتر شروط التأجير</span>
+                                 </label>
+                                 <input type="checkbox" required checked={acceptTerms} onChange={(e) => setAcceptTerms(e.target.checked)} className="w-5 h-5 accent-emerald-500 cursor-pointer rounded shadow-inner" />
+                             </div>
+                         )}
+
+                     </div>
                  )}
 
-                 <div className="pt-4 border-t border-white/5 space-y-3">
-                    <p className="text-[9px] font-black text-white/40 uppercase">اختر طريقة الدفع المفضلة</p>
-                    <div className="grid grid-cols-2 gap-3">
-                        <button type="button" onClick={() => setPaymentMethod('office')} className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${paymentMethod === 'office' ? 'bg-emerald-500 border-emerald-400 text-black shadow-lg shadow-emerald-500/20' : 'bg-[#0B192C] border-white/10 text-white/40'}`}>
-                            <Store size={18}/>
-                            <span className="text-[10px] font-black">الدفع بالمكتب</span>
-                        </button>
-                        <button type="button" onClick={() => setPaymentMethod('cham_cash')} className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${paymentMethod === 'cham_cash' ? 'bg-indigo-500 border-indigo-400 text-white shadow-lg shadow-indigo-500/20' : 'bg-[#0B192C] border-white/10 text-white/40'}`}>
-                            <Wallet size={18}/>
-                            <span className="text-[10px] font-black">شام كاش</span>
-                        </button>
-                    </div>
-                    {paymentMethod === 'office' && <p className="text-[8px] text-emerald-400/60 text-center mt-2 font-bold">مركزنا: حلب - محطة بغداد - مقابل المحطة</p>}
+                 {/* 🌟 شاشة الفاتورة التفصيلية للسيارات 🌟 */}
+                 {invoicePreview && selectedCategory === 'car' && (
+                     <div className="bg-emerald-500/10 border border-emerald-500/20 p-5 rounded-3xl text-right space-y-4 mb-4 mt-2 animate-in fade-in zoom-in-95 shadow-lg relative overflow-hidden">
+                          <div className="absolute top-0 left-0 w-24 h-24 bg-emerald-500/10 blur-2xl rounded-full pointer-events-none"></div>
+                          <h4 className="font-black text-emerald-400 border-b border-emerald-500/20 pb-3 mb-3 flex items-center gap-2"><FileText size={18}/> فاتورة تفصيلية للحجز</h4>
+                          
+                          <div className="space-y-3 relative z-10">
+                              <div className="flex justify-between text-xs border-b border-white/5 pb-2"><span className="text-white/60 font-bold">السيارة المطلوبة:</span> <span className="font-black">{bookingItem.name}</span></div>
+                              <div className="flex justify-between text-xs border-b border-white/5 pb-2"><span className="text-white/60 font-bold">مدة الإيجار:</span> <span className="font-black text-amber-400">{invoicePreview.daysCount} أيام</span></div>
+                              <div className="flex justify-between text-xs border-b border-white/5 pb-2"><span className="text-white/60 font-bold">حالة السائق:</span> <span className="font-black text-amber-400">{invoicePreview.isWithDriver ? 'مع سائق (+25%)' : 'بدون سائق'}</span></div>
+                              <div className="flex justify-between text-xs border-b border-white/5 pb-2"><span className="text-white/60 font-bold">تاريخ الاستلام:</span> <span className="font-black" dir="ltr">{invoicePreview.startDate}</span></div>
+                              <div className="flex justify-between text-xs border-b border-white/5 pb-2"><span className="text-white/60 font-bold">طريقة الدفع:</span> <span className="font-black bg-white/10 px-2 py-0.5 rounded-md">{paymentMethod === 'office' ? 'نقداً في المكتب' : 'شام كاش'}</span></div>
+                          </div>
+                          
+                          <div className="border-t-2 border-dashed border-emerald-500/30 pt-4 mt-4 flex justify-between items-center relative z-10">
+                               <div className="flex flex-col">
+                                   <span className="text-[10px] font-black text-emerald-400/80 mb-1">المبلغ الإجمالي للاعتماد:</span>
+                                   <span className="text-[8px] text-white/40">*شامل جميع الإضافات والشروط المذكورة</span>
+                               </div>
+                               <span className="text-xl font-black text-white bg-black/30 px-3 py-2 rounded-xl border border-white/5 shadow-inner">
+                                   {new Intl.NumberFormat('ar-SY', { style: 'currency', currency: 'SYP' }).format(invoicePreview.totalPrice)}
+                               </span>
+                          </div>
+                     </div>
+                 )}
+
+                 {/* 🌟 شاشة الفاتورة التفصيلية للنقل البري 🌟 */}
+                 {invoicePreview && selectedCategory === 'transit' && (
+                     <div className="bg-indigo-500/10 border border-indigo-500/20 p-5 rounded-3xl text-right space-y-4 mb-4 mt-2 animate-in fade-in zoom-in-95 shadow-lg relative overflow-hidden">
+                          <div className="absolute top-0 left-0 w-24 h-24 bg-indigo-500/10 blur-2xl rounded-full pointer-events-none"></div>
+                          <h4 className="font-black text-indigo-400 border-b border-indigo-500/20 pb-3 mb-3 flex items-center gap-2"><FileText size={18}/> فاتورة رحلة النقل البري</h4>
+                          
+                          <div className="space-y-3 relative z-10">
+                              <div className="flex justify-between text-xs border-b border-white/5 pb-2"><span className="text-white/60 font-bold">خط الرحلة:</span> <span className="font-black">{invoicePreview.fromLocation} <ChevronLeft size={10} className="inline"/> {invoicePreview.toLocation}</span></div>
+                              <div className="flex justify-between text-xs border-b border-white/5 pb-2"><span className="text-white/60 font-bold">المركبة والركاب:</span> <span className="font-black text-amber-400">{bookingItem.title.replace('طلب حجز - ', '')} ({invoicePreview.pax === 'full' ? 'سيارة كاملة' : invoicePreview.pax + ' راكب'})</span></div>
+                              <div className="flex justify-between text-xs border-b border-white/5 pb-2"><span className="text-white/60 font-bold">موعد الرحلة:</span> <span className="font-black">{invoicePreview.tripDate} | {invoicePreview.tripTime}</span></div>
+                              
+                              <div className="pt-2">
+                                  <span className="text-[10px] text-white/50 font-bold block mb-2">الخدمات الإضافية:</span>
+                                  <div className="flex flex-wrap gap-2">
+                                      {invoicePreview.bags > 0 && <span className="bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded-lg text-[9px] font-bold border border-indigo-500/30">حقائب: {invoicePreview.bags}</span>}
+                                      {invoicePreview.meal && <span className="bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded-lg text-[9px] font-bold border border-indigo-500/30">وجبة طعام</span>}
+                                      {invoicePreview.internet && <span className="bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded-lg text-[9px] font-bold border border-indigo-500/30">إنترنت Wi-Fi</span>}
+                                      {invoicePreview.extra && <span className="bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded-lg text-[9px] font-bold border border-indigo-500/30">تنقلات إضافية</span>}
+                                      {invoicePreview.bags === '0' && !invoicePreview.meal && !invoicePreview.internet && !invoicePreview.extra && <span className="text-[10px] text-white/30">لا يوجد إضافات</span>}
+                                  </div>
+                              </div>
+                          </div>
+                          
+                          <div className="border-t-2 border-dashed border-indigo-500/30 pt-4 mt-4 flex justify-between items-center relative z-10">
+                               <div className="flex flex-col">
+                                   <span className="text-[10px] font-black text-indigo-400/80 mb-1">المبلغ الإجمالي النهائي:</span>
+                                   <span className="text-[8px] text-white/40">*يُدفع بالدولار أو ما يعادله</span>
+                               </div>
+                               <span className="text-xl font-black text-white bg-black/30 px-4 py-2 rounded-xl border border-white/5 shadow-inner">
+                                   ${invoicePreview.totalPrice}
+                               </span>
+                          </div>
+                     </div>
+                 )}
+
+                 <div className="mt-auto pt-4 flex flex-col gap-2">
+                     <button 
+                         type="submit" 
+                         disabled={(selectedCategory === 'car' && !invoicePreview && !acceptTerms)} 
+                         className={`w-full py-4 rounded-2xl font-black text-xs text-white shadow-lg active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${selectedCategory === 'transit' ? 'bg-indigo-600 shadow-indigo-600/20' : 'bg-emerald-500 text-black shadow-emerald-500/20'}`}>
+                         {invoicePreview ? 'تأكيد الحجز النهائي' : (bookingItem?.isEditMode ? 'حفظ التعديلات وإعادة الإرسال' : 'متابعة وإصدار الفاتورة')}
+                     </button>
+                     
+                     {invoicePreview && (
+                         <button 
+                             type="button" 
+                             onClick={() => setInvoicePreview(null)} 
+                             className="w-full bg-white/5 text-white/60 py-3.5 rounded-2xl font-black text-[11px] hover:bg-white/10 hover:text-white transition-all border border-white/10 active:scale-95">
+                             رجوع لتعديل البيانات
+                         </button>
+                     )}
                  </div>
-
-                 <button type="submit" className="w-full bg-emerald-500 py-4 rounded-2xl font-black text-xs text-black mt-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all">
-                     {bookingItem?.isEditMode ? 'حفظ التعديلات وإعادة الإرسال' : 'تأكيد وإرسال الطلب'}
-                 </button>
               </form>
            </div>
         </div>
@@ -2029,6 +2024,10 @@ export default function App() {
         .animate-marquee:hover { animation-play-state: paused; }
         @keyframes marquee { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
         select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: left 0.75rem center; background-size: 1rem; }
+        /* Scrollbar styles for the terms modal */
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background-color: rgba(16, 185, 129, 0.2); border-radius: 10px; }
       `}</style>
     </div>
   );
