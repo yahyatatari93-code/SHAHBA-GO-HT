@@ -130,6 +130,7 @@ const HT_REWARDS = [
 ];
 
 export default function App() {
+  // 🌟 إدارة حالة الجلسة والشاشات 🌟
   const [showSplash, setShowSplash] = useState(true);
   const [activeView, setActiveView] = useState('main'); 
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -138,6 +139,7 @@ export default function App() {
   const [selectedBusType, setSelectedBusType] = useState(null);
   const [hasKidsState, setHasKidsState] = useState('no'); 
   
+  // 🌟 تهيئة المستخدم من الـ Local Storage 🌟
   const [user, setUser] = useState(() => {
      const savedUser = localStorage.getItem('sh_user');
      return savedUser ? JSON.parse(savedUser) : null;
@@ -146,6 +148,7 @@ export default function App() {
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const isGuest = user?.isGuest === true;
   const isUserAdmin = user && (
+    user.role === 'admin' || 
     (user.email && ADMIN_ACCOUNTS.includes(user.email.toLowerCase())) ||
     (user.phoneNumber && ADMIN_ACCOUNTS.includes(user.phoneNumber))
   );
@@ -169,7 +172,16 @@ export default function App() {
   };
   const todayDate = getTodayDateString();
 
-  const [authModal, setAuthModal] = useState(null); 
+  const getAuthHeaders = () => {
+      const token = localStorage.getItem('sh_token');
+      return {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      };
+  };
+
+  // 🌟 حالات نظام المصادقة الجديد 🌟
+  const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
   const [authTab, setAuthTab] = useState('email'); 
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
@@ -178,6 +190,7 @@ export default function App() {
   const [otpCode, setOtpCode] = useState('');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+  
   const [logoutConfirm, setLogoutConfirm] = useState(false); 
 
   const [allOrders, setAllOrders] = useState([]);
@@ -207,20 +220,17 @@ export default function App() {
 
   const [printingOrder, setPrintingOrder] = useState(null); 
   
-  // حالات السيارات والنقل البري
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [invoicePreview, setInvoicePreview] = useState(null);
 
-  // 🌟 حالة مخصصة لحساب التكلفة المباشرة لخدمة النقل البري
   const [transitLive, setTransitLive] = useState({
       from: '', to: '', pax: '1', bags: '0', meal: false, internet: false, extra: false
   });
 
-  // حساب سعر النقل البري التلقائي
   const calculateLiveTransitPrice = () => {
       let base = 0;
-      if (transitLive.from && transitLive.to) base = 75; // السعر الافتراضي المتفق عليه
+      if (transitLive.from && transitLive.to) base = 75;
       if (base === 0) return 0;
 
       let paxMultiplier = 1;
@@ -228,7 +238,6 @@ export default function App() {
           if (transitLive.pax === '2') paxMultiplier = 2;
           else if (transitLive.pax === 'full') paxMultiplier = 3;
       } else {
-          // للفان والميكروباص
           paxMultiplier = parseInt(transitLive.pax) || 1;
       }
 
@@ -247,6 +256,12 @@ export default function App() {
     setToasts(prev => [...prev, { id, msg, type, title }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 6000);
   };
+
+  // إعدادات الـ Splash Screen
+  useEffect(() => {
+    const timer = setTimeout(() => setShowSplash(false), 2500); 
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
@@ -286,15 +301,6 @@ export default function App() {
   }, [globalAlerts, isUserAdmin]);
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 2500); 
-    if (!user) {
-        const guestUser = { uid: 'guest_' + Date.now(), isGuest: true };
-        setUser(guestUser);
-    }
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
     if (!user) return; 
 
     const loadData = async () => {
@@ -302,7 +308,7 @@ export default function App() {
            const carsRes = await fetch(`${API_URL}/cars`).catch(()=>null);
            if (carsRes && carsRes.ok) setCarsList(await carsRes.json());
 
-           const ordersRes = await fetch(`${API_URL}/orders`).catch(()=>null);
+           const ordersRes = await fetch(`${API_URL}/orders`, { headers: getAuthHeaders() }).catch(()=>null);
            if (ordersRes && ordersRes.ok) {
                const ords = await ordersRes.json();
                setAllOrders(ords);
@@ -429,93 +435,115 @@ export default function App() {
       }
   };
 
-  const handleAction = async (e) => {
+  // 🌟 نظام المصادقة الجديد (اللوحة الشاملة) 🌟
+  const handleAuthSubmit = async (e) => {
       e.preventDefault();
       setAuthError('');
       const dbUsers = JSON.parse(localStorage.getItem('sh_db_users') || '[]');
-      
-      if ((authModal === 'signup' || (authModal === 'login' && authTab === 'phone')) && !otpSent) {
+
+      if (authMode === 'login') {
           setAuthLoading(true);
           try {
-              const res = await fetch(`${API_URL}/auth/send-otp`, {
+              // محاولة الاتصال بالسيرفر (API)
+              const res = await fetch(`${API_URL}/auth/login`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ method: authTab, email: authEmail, phone: authPhone })
+                  body: JSON.stringify({ method: authTab, email: authEmail, password: authPassword, phone: authPhone })
               });
               
+              const data = await res.json();
               if (res.ok) {
-                  setAuthLoading(false);
-                  setOtpSent(true);
-                  addToast(`تم إرسال رمز التحقق إلى ${authTab === 'email' ? 'إيميلك' : 'رقمك'} بنجاح!`, 'success');
+                  setUser(data.user);
+                  localStorage.setItem('sh_user', JSON.stringify(data.user));
+                  localStorage.setItem('sh_token', data.token);
+                  addToast('تم تسجيل الدخول بنجاح', 'success');
               } else {
-                  const data = await res.json();
-                  setAuthError(data.error || 'حدث خطأ أثناء إرسال الرمز');
-                  setAuthLoading(false);
+                  setAuthError(data.error || 'بيانات الدخول غير صحيحة!');
               }
           } catch (error) {
-              setTimeout(() => {
-                  setAuthLoading(false);
-                  setOtpSent(true);
-                  addToast(`(وضع التجربة) السيرفر غير متصل، استخدم الرمز 123456`, 'info');
-              }, 1000);
-          }
-          return;
-      }
-      
-      if (authModal === 'signup' && otpSent) {
-          if(otpCode !== '123456' && otpCode.length > 0) { 
-              // التحقق من الرمز
-          }
-          const exists = dbUsers.find(u => (authTab === 'email' && u.email === authEmail) || (authTab === 'phone' && u.phone === authPhone));
-          if (exists) {
-              setAuthError('هذا الحساب مسجل مسبقاً! يرجى تسجيل الدخول.');
-              return;
-          }
-          const newUser = { 
-              uid: 'u_' + Date.now(), 
-              email: authTab === 'email' ? authEmail : null, 
-              phone: authTab === 'phone' ? authPhone : null, 
-              password: authPassword,
-              isGuest: false
-          };
-          dbUsers.push(newUser);
-          localStorage.setItem('sh_db_users', JSON.stringify(dbUsers));
-          setUser(newUser);
-          localStorage.setItem('sh_user', JSON.stringify(newUser));
-          setAuthModal(null);
-          addToast('تم إنشاء الحساب وتسجيل الدخول بنجاح!', 'success');
-          return;
-      }
-      
-      if (authModal === 'login') {
-          const accountFound = dbUsers.find(u => 
-              (authTab === 'email' && u.email === authEmail && u.password === authPassword) || 
-              (authTab === 'phone' && u.phone === authPhone)
-          );
+              // نظام الطوارئ للمحاكي (Canvas)
+              const accountFound = dbUsers.find(u => 
+                  (authTab === 'email' && u.email === authEmail && u.password === authPassword) || 
+                  (authTab === 'phone' && u.phone === authPhone && u.password === authPassword)
+              );
 
-          if (!accountFound && !ADMIN_ACCOUNTS.includes(authEmail) && !ADMIN_ACCOUNTS.includes(authPhone)) {
-              setAuthError('بيانات الدخول خاطئة أو الحساب غير مسجل!');
-              return;
+              if (accountFound || ADMIN_ACCOUNTS.includes(authEmail) || ADMIN_ACCOUNTS.includes(authPhone)) {
+                  const loggedInUser = accountFound || { uid: 'admin_' + Date.now(), email: authEmail, phoneNumber: authPhone, role: 'admin', isGuest: false };
+                  setUser(loggedInUser);
+                  localStorage.setItem('sh_user', JSON.stringify(loggedInUser));
+                  addToast('تم تسجيل الدخول بنجاح', 'success');
+              } else {
+                  setAuthError('بيانات الدخول خاطئة أو الحساب غير مسجل!');
+              }
           }
-
-          const loggedInUser = accountFound || { 
-              uid: 'admin_' + Date.now(), 
-              email: authEmail, 
-              phoneNumber: authPhone, 
-              isGuest: false 
-          };
-          setUser(loggedInUser);
-          localStorage.setItem('sh_user', JSON.stringify(loggedInUser));
-          setAuthModal(null);
-          addToast('تم تسجيل الدخول بنجاح', 'success');
+          setAuthLoading(false);
+      } else {
+          // عملية إنشاء الحساب (الخطوة 1: إرسال الرمز)
+          if (!otpSent) {
+              const exists = dbUsers.find(u => (authTab === 'email' && u.email === authEmail) || (authTab === 'phone' && u.phone === authPhone));
+              if (exists) {
+                  setAuthError('هذا الحساب مسجل مسبقاً! يرجى تسجيل الدخول.');
+                  return;
+              }
+              
+              setAuthLoading(true);
+              try {
+                  const res = await fetch(`${API_URL}/auth/send-otp`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ method: authTab, email: authEmail, phone: authPhone })
+                  });
+                  if (res.ok) {
+                      setOtpSent(true);
+                      addToast(`تم إرسال الرمز إلى ${authTab === 'email' ? 'إيميلك' : 'رقمك'}!`, 'success');
+                  } else {
+                      throw new Error('Failed');
+                  }
+              } catch (error) {
+                  setTimeout(() => {
+                      setOtpSent(true);
+                      addToast(`(وضع التجربة) استخدم الرمز 123456`, 'info');
+                  }, 1000);
+              }
+              setAuthLoading(false);
+          } else {
+              // الخطوة 2: تأكيد الرمز وإنشاء الحساب
+              setAuthLoading(true);
+              if (otpCode !== '123456' && otpCode.length > 0) {
+                 // سيتم التحقق من الرمز الحقيقي هنا عند ربط الـ API بشكل كامل
+              }
+              
+              const newUser = { 
+                  uid: 'u_' + Date.now(), 
+                  email: authTab === 'email' ? authEmail : null, 
+                  phone: authTab === 'phone' ? authPhone : null, 
+                  password: authPassword, // تم إضافة كلمة المرور
+                  isGuest: false,
+                  role: 'user'
+              };
+              
+              dbUsers.push(newUser);
+              localStorage.setItem('sh_db_users', JSON.stringify(dbUsers));
+              setUser(newUser);
+              localStorage.setItem('sh_user', JSON.stringify(newUser));
+              addToast('تم إنشاء الحساب وتسجيل الدخول بنجاح!', 'success');
+              setAuthLoading(false);
+          }
       }
+  };
+
+  // الدخول كزائر
+  const handleGuestLogin = () => {
+      const guestUser = { uid: 'guest_' + Date.now(), isGuest: true };
+      setUser(guestUser);
+      localStorage.setItem('sh_user', JSON.stringify(guestUser));
+      addToast('تم الدخول كزائر للتصفح', 'info');
   };
 
   const executeLogout = () => {
       localStorage.removeItem('sh_user');
       localStorage.removeItem('sh_token');
-      const guestUser = { uid: 'guest_' + Date.now(), isGuest: true };
-      setUser(guestUser);
+      setUser(null); // سيتم توجيهه فوراً لشاشة الدخول
       setShowAdminPanel(false);
       setActiveView('main');
       setLogoutConfirm(false);
@@ -528,18 +556,20 @@ export default function App() {
       const newPrice = e.target.price.value;
       
       try {
-          await fetch(`${API_URL}/cars/${editingCar.id}`, {
+          const res = await fetch(`${API_URL}/cars/${editingCar.id}`, {
               method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
+              headers: getAuthHeaders(),
               body: JSON.stringify({ price: newPrice })
           });
-          setCarsList(prev => prev.map(c => c.id === editingCar.id ? { ...c, price: newPrice } : c));
-          setEditingCar(null);
-          addToast('تم تحديث سعر السيارة بنجاح', 'success');
+          if (res.ok) {
+              setCarsList(prev => prev.map(c => c.id === editingCar.id ? { ...c, price: newPrice } : c));
+              setEditingCar(null);
+              addToast('تم تحديث سعر السيارة بنجاح', 'success');
+          } else {
+              addToast('ليس لديك صلاحية لهذا التعديل', 'error');
+          }
       } catch (error) {
-          setCarsList(prev => prev.map(c => c.id === editingCar.id ? { ...c, price: newPrice } : c));
-          setEditingCar(null);
-          addToast('تم التحديث (محلياً)', 'success');
+          addToast('تعذر الاتصال بالسيرفر لحفظ التعديلات.', 'error');
       }
   };
 
@@ -563,7 +593,6 @@ export default function App() {
         localStorage.setItem('sh-user-name', formValues.name);
         localStorage.setItem('sh-user-phone', phoneStr);
 
-        // اعتراض عملية الإرسال لآجار السيارات
         if (selectedCategory === 'car') {
             const basePriceStr = bookingItem.price || "0";
             const basePrice = parseInt(basePriceStr.replace(/[^0-9]/g, '')) || 0;
@@ -580,12 +609,11 @@ export default function App() {
             return; 
         }
 
-        // 🌟 اعتراض عملية الإرسال لخدمة النقل البري لإنشاء فاتورتها الخاصة 🌟
         if (selectedCategory === 'transit') {
             const finalPrice = calculateLiveTransitPrice();
             setInvoicePreview({
                 ...formValues,
-                ...transitLive, // نرفق الخيارات الإضافية
+                ...transitLive, 
                 totalPrice: finalPrice,
                 currency: '$'
             });
@@ -617,40 +645,41 @@ export default function App() {
     };
 
     try {
+        let res;
         if (bookingItem?.isEditMode && bookingItem?.id) {
-           await fetch(`${API_URL}/orders/${bookingItem.id}`, {
-               method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(orderData)
+           res = await fetch(`${API_URL}/orders/${bookingItem.id}`, {
+               method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(orderData)
            });
         } else {
-           await fetch(`${API_URL}/orders`, {
-               method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(orderData)
+           res = await fetch(`${API_URL}/orders`, {
+               method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(orderData)
            });
-           if (!isGuest) setUserPoints(prev => prev + 25);
+        }
+        
+        if (res.ok) {
+            if (!isGuest && !bookingItem?.isEditMode) setUserPoints(prev => prev + 25);
+            setBookingItem(null);
+            setInvoicePreview(null);
+            setAcceptTerms(false);
+            setHasKidsState('no');
+            setSelectedBusType(null);
+            setSelectedHotel(null);
+            setSelectedCity(null);
+            setTransitLive({ from: '', to: '', pax: '1', bags: '0', meal: false, internet: false, extra: false });
+            setShowSuccessCard(true);
+        } else {
+            addToast('حدث خطأ أثناء معالجة الطلب في السيرفر.', 'error');
         }
     } catch(err) {
-        const localOrder = { id: 'ord_' + Date.now(), ...orderData, createdAt: Date.now() };
-        if (bookingItem?.isEditMode) {
-           setAllOrders(prev => prev.map(o => o.id === bookingItem.id ? localOrder : o));
-        } else {
-           setAllOrders(prev => [localOrder, ...prev]);
-           if (!isGuest) setUserPoints(prev => prev + 25);
-        }
+        addToast('خطأ في الاتصال بالسيرفر! يرجى المحاولة لاحقاً.', 'error');
     }
-    
-    setBookingItem(null);
-    setInvoicePreview(null);
-    setAcceptTerms(false);
-    setHasKidsState('no');
-    setSelectedBusType(null);
-    setSelectedHotel(null);
-    setSelectedCity(null);
-    setTransitLive({ from: '', to: '', pax: '1', bags: '0', meal: false, internet: false, extra: false });
-    setShowSuccessCard(true);
   };
 
   const handleRedeemReward = async (reward) => {
       if (isGuest) {
-          setAuthModal('signup');
+          // إذا كان زائر، نوجهه لشاشة الدخول بمسح اليوزر
+          localStorage.removeItem('sh_user');
+          setUser(null);
           return;
       }
       if (userPoints >= reward.points) {
@@ -664,13 +693,16 @@ export default function App() {
               userId: user.uid
           };
           try {
-              await fetch(`${API_URL}/orders`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(rewardOrder) });
+              const res = await fetch(`${API_URL}/orders`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(rewardOrder) });
+              if (res.ok) {
+                  setUserPoints(prev => prev - reward.points);
+                  addToast(`مبروك! تم إرسال طلب استبدال (${reward.name}).`, 'success');
+              } else {
+                  addToast('تعذر إرسال الطلب.', 'error');
+              }
           } catch(e) {
-              setAllOrders(prev => [{ id: 'ord_'+Date.now(), ...rewardOrder, createdAt: Date.now() }, ...prev]);
+              addToast('خطأ في الاتصال بالسيرفر! يرجى المحاولة لاحقاً.', 'error');
           }
-          setUserPoints(prev => prev - reward.points);
-          setRedeemSuccess(`مبروك! تم إرسال طلب استبدال (${reward.name}).`);
-          setTimeout(() => setRedeemSuccess(null), 6000);
       } else {
           alert(`رصيدك غير كافٍ. تحتاج إلى ${reward.points - userPoints} نقطة إضافية.`);
       }
@@ -679,15 +711,19 @@ export default function App() {
   const updateOrderStatus = async (orderId, status, reason = "") => {
     if (!user) return;
     try {
-        await fetch(`${API_URL}/orders/${orderId}`, {
-            method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ status, rejectionReason: reason })
+        const res = await fetch(`${API_URL}/orders/${orderId}`, {
+            method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ status, rejectionReason: reason })
         });
-        setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, rejectionReason: reason } : o));
+        if (res.ok) {
+            setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, rejectionReason: reason } : o));
+            setRejectModal(null);
+            setRejectReasonText("");
+        } else {
+            addToast('ليس لديك صلاحية أو حدث خطأ بالسيرفر.', 'error');
+        }
     } catch (err) {
-        setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, rejectionReason: reason } : o));
+        addToast('تعذر الاتصال بالسيرفر.', 'error');
     }
-    setRejectModal(null);
-    setRejectReasonText("");
   };
 
   const addMarketingEvent = async (e) => {
@@ -695,19 +731,29 @@ export default function App() {
     const formData = new FormData(e.target);
     const eventData = Object.fromEntries(formData.entries());
     try {
-        await fetch(`${API_URL}/events`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(eventData) });
+        const res = await fetch(`${API_URL}/events`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(eventData) });
+        if (res.ok) {
+            const newEv = await res.json();
+            setDynamicEvents(prev => [newEv.event, ...prev]);
+            e.target.reset();
+            addToast('تم إضافة الإعلان بنجاح', 'success');
+        } else {
+            addToast('ليس لديك صلاحية', 'error');
+        }
     } catch(err) {
-        setDynamicEvents(prev => [{ id: 'evt_'+Date.now(), ...eventData, createdAt: Date.now() }, ...prev]);
+        addToast('تعذر الاتصال بالسيرفر.', 'error');
     }
-    e.target.reset();
-    addToast('تم إضافة الإعلان بنجاح', 'success');
   };
 
   const deleteMarketingEvent = async (id) => {
     try {
-        await fetch(`${API_URL}/events/${id}`, { method: 'DELETE' });
-    } catch(err) {}
-    setDynamicEvents(prev => prev.filter(ev => ev.id !== id));
+        const res = await fetch(`${API_URL}/events/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+        if (res.ok) {
+            setDynamicEvents(prev => prev.filter(ev => ev.id !== id));
+        }
+    } catch(err) {
+        addToast('تعذر الاتصال بالسيرفر.', 'error');
+    }
   };
 
   const sendGlobalAlert = async (e) => {
@@ -715,16 +761,18 @@ export default function App() {
     const formData = new FormData(e.target);
     const alertData = { message: formData.get('message'), type: formData.get('type') };
     try {
-        const res = await fetch(`${API_URL}/alerts`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(alertData) });
+        const res = await fetch(`${API_URL}/alerts`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(alertData) });
         if (res.ok) {
             const data = await res.json();
             setGlobalAlerts(prev => [data.alert, ...(prev || [])]);
+            e.target.reset();
+            addToast('تم إرسال التنبيه وسيظهر للعملاء فوراً!', 'success');
+        } else {
+            addToast('ليس لديك صلاحية', 'error');
         }
     } catch(err) {
-        setGlobalAlerts(prev => [{ id: 'alt_' + Date.now(), ...alertData, createdAt: Date.now() }, ...(prev || [])]);
+        addToast('تعذر الاتصال بالسيرفر.', 'error');
     }
-    e.target.reset();
-    addToast('تم إرسال التنبيه وسيظهر للعملاء فوراً!', 'success');
   };
 
   const renderOrderInfo = (order) => {
@@ -812,6 +860,7 @@ export default function App() {
     </div>
   );
 
+  // 1. شاشة البداية (Splash Screen)
   if (showSplash) {
     return (
       <div className="fixed inset-0 bg-[#0B192C] flex flex-col items-center justify-center z-[2000]">
@@ -832,6 +881,85 @@ export default function App() {
     );
   }
 
+  // 2. شاشة تسجيل الدخول الإجبارية (Auth Screen)
+  if (!user) {
+      return (
+          <div className="min-h-screen bg-[#0B192C] flex flex-col items-center justify-center p-6 relative overflow-hidden" dir="rtl">
+              <ToastContainer />
+              
+              {/* زينة الخلفية */}
+              <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+              <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+              <div className="w-full max-w-md bg-[#112240]/80 backdrop-blur-xl p-8 rounded-[3rem] border border-white/10 shadow-2xl relative z-10 animate-in zoom-in-95">
+                  <div className="flex flex-col items-center mb-8">
+                      <HTLogo size="large" />
+                      <h1 className="text-3xl font-black italic text-white mt-4 tracking-tighter">شهبا <span className="text-emerald-400">Go</span></h1>
+                      <p className="text-emerald-400/80 text-[10px] font-bold uppercase tracking-[0.2em] mt-1">Hammash & Tatari</p>
+                  </div>
+
+                  <h2 className="text-xl font-black text-white text-center mb-6">
+                      {authMode === 'login' ? 'تسجيل الدخول' : 'إنشاء حساب جديد'}
+                  </h2>
+
+                  <div className="flex bg-[#0B192C]/80 p-1.5 rounded-2xl mb-6 border border-white/10 shadow-inner">
+                      <button onClick={() => {setAuthTab('email'); setAuthError(''); setOtpSent(false); setOtpCode('');}} className={`flex-1 py-3 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${authTab === 'email' ? 'bg-emerald-500 text-black shadow-md' : 'text-white/40 hover:text-white'}`}>
+                          <Mail size={16} /> الإيميل
+                      </button>
+                      <button onClick={() => {setAuthTab('phone'); setAuthError(''); setOtpSent(false); setOtpCode('');}} className={`flex-1 py-3 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${authTab === 'phone' ? 'bg-emerald-500 text-black shadow-md' : 'text-white/40 hover:text-white'}`}>
+                          <Phone size={16} /> الهاتف
+                      </button>
+                  </div>
+
+                  {authError && <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-2xl text-xs font-bold mb-6 text-center animate-in fade-in">{authError}</div>}
+
+                  <form onSubmit={handleAuthSubmit} className="space-y-4">
+                      {authTab === 'email' ? (
+                          <input type="email" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)} disabled={otpSent} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-4 px-4 text-xs text-white text-right outline-none focus:border-emerald-500 disabled:opacity-50 transition-all shadow-inner" placeholder="البريد الإلكتروني (مثال: user@mail.com)" />
+                      ) : (
+                          <div className="relative flex" dir="ltr">
+                              <div className="bg-[#0B192C] border border-white/10 border-r-0 rounded-l-2xl px-4 flex items-center text-white/60 font-medium text-xs shadow-inner">+963</div>
+                              <input type="tel" required value={authPhone} onChange={(e)=>setAuthPhone(e.target.value)} disabled={otpSent} className="w-full bg-[#0B192C] border border-white/10 rounded-r-2xl py-4 px-4 text-xs text-white outline-none focus:border-emerald-500 disabled:opacity-50 transition-all shadow-inner" placeholder="09xx xxx xxx" />
+                          </div>
+                      )}
+
+                      <input type="password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} disabled={otpSent} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-4 px-4 text-xs text-white text-right outline-none focus:border-emerald-500 disabled:opacity-50 transition-all shadow-inner" placeholder="كلمة المرور" />
+
+                      {authMode === 'signup' && otpSent && (
+                          <div className="animate-in fade-in slide-in-from-top-2 space-y-4 pt-4 border-t border-white/10">
+                              <p className="text-[10px] text-emerald-400 text-center font-bold">تم إرسال رمز التحقق، يرجى إدخاله أدناه:</p>
+                              <input type="text" required value={otpCode} onChange={(e)=>setOtpCode(e.target.value)} className="w-full bg-[#0B192C] border border-white/10 rounded-2xl py-4 px-4 text-xl tracking-[0.5em] font-black text-white text-center outline-none focus:border-emerald-500 shadow-inner" placeholder="123456" maxLength={6} />
+                          </div>
+                      )}
+
+                      <button type="submit" disabled={authLoading || (authMode === 'signup' && otpSent && !otpCode)} className="w-full bg-emerald-500 text-black py-4 rounded-2xl font-black text-sm shadow-lg shadow-emerald-500/20 active:scale-95 transition-all disabled:opacity-50 mt-4">
+                          {authLoading ? 'جاري المعالجة...' : 
+                              (authMode === 'login' ? 'تسجيل الدخول' : 
+                                  (!otpSent ? 'إرسال رمز التأكيد' : 'تأكيد وإنشاء الحساب'))}
+                      </button>
+                  </form>
+
+                  <div className="mt-8 text-center space-y-4">
+                      {authMode === 'login' ? (
+                          <p className="text-xs text-white/50 font-bold">
+                              ليس لديك حساب؟ <span onClick={() => {setAuthMode('signup'); setAuthError(''); setOtpSent(false); setOtpCode('');}} className="text-emerald-400 cursor-pointer hover:text-emerald-300 font-black px-1 transition-all">إنشاء حساب جديد</span>
+                          </p>
+                      ) : (
+                          <p className="text-xs text-white/50 font-bold">
+                              لديك حساب بالفعل؟ <span onClick={() => {setAuthMode('login'); setAuthError(''); setOtpSent(false); setOtpCode('');}} className="text-emerald-400 cursor-pointer hover:text-emerald-300 font-black px-1 transition-all">تسجيل الدخول</span>
+                          </p>
+                      )}
+                      
+                      <div className="pt-6 border-t border-white/10">
+                          <button onClick={handleGuestLogin} className="text-[10px] text-white/30 hover:text-white font-bold transition-colors">تخطي ومتابعة كزائر</button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      );
+  }
+
+  // 3. قالب الفاتورة المطبوعة (PDF Voucher)
   if (printingOrder) {
       return (
           <div className="min-h-screen bg-white text-black p-8 font-sans" dir="rtl">
@@ -906,6 +1034,7 @@ export default function App() {
       );
   }
 
+  // 4. واجهة التطبيق الرئيسية (Main App)
   return (
     <div className="min-h-screen bg-[#0B192C] text-white font-sans overflow-x-hidden pb-32" dir="rtl">
       <ToastContainer />
@@ -1020,7 +1149,15 @@ export default function App() {
             </div>
 
             {(!isUserAdmin || !showAdminPanel) && (
-                <button onClick={() => {setActiveView('wallet'); setSelectedCategory(null);}} className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 rounded-xl text-emerald-400 hover:bg-emerald-500/30 transition-colors">
+                <button onClick={() => {
+                    if (isGuest) {
+                        localStorage.removeItem('sh_user');
+                        setUser(null); // توجيه لشاشة الدخول
+                    } else {
+                        setActiveView('wallet'); 
+                        setSelectedCategory(null);
+                    }
+                }} className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 rounded-xl text-emerald-400 hover:bg-emerald-500/30 transition-colors">
                     <Gift size={14}/>
                     <span className="text-[10px] font-black">{isGuest ? '0' : userPoints}</span>
                 </button>
@@ -1034,7 +1171,10 @@ export default function App() {
             )}
 
             {isGuest ? (
-                <button onClick={() => setAuthModal('login')} className="px-3 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border border-white/10 bg-white/5 text-slate-300 hover:text-white transition-colors">
+                <button onClick={() => {
+                    localStorage.removeItem('sh_user');
+                    setUser(null); // توجيه لشاشة الدخول الفخمة
+                }} className="px-3 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border border-white/10 bg-white/5 text-slate-300 hover:text-white transition-colors">
                     <LogIn size={14} /> دخول
                 </button>
             ) : (
@@ -1179,7 +1319,7 @@ export default function App() {
                    </div>
                 </div>
 
-                <div onClick={() => !isGuest ? setActiveView('wallet') : setAuthModal('signup')} className="bg-gradient-to-r from-emerald-900/40 to-[#112240] border border-emerald-500/20 p-5 rounded-[2rem] flex items-center gap-4 cursor-pointer shadow-lg hover:border-emerald-500/40 transition-colors">
+                <div onClick={() => !isGuest ? setActiveView('wallet') : setAuthMode('signup')} className="bg-gradient-to-r from-emerald-900/40 to-[#112240] border border-emerald-500/20 p-5 rounded-[2rem] flex items-center gap-4 cursor-pointer shadow-lg hover:border-emerald-500/40 transition-colors">
                    <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 shadow-inner"><Star size={24}/></div>
                    <div className="flex-1">
                       <h4 className="text-xs font-black text-emerald-400">انضم لنادي النخبة HT</h4>
@@ -1657,7 +1797,6 @@ export default function App() {
                            </div>
                          )}
 
-                         {/* 🌟 تعديلات نموذج النقل البري 🌟 */}
                          {selectedCategory === 'transit' && (
                            <div className="space-y-3 p-4 bg-indigo-500/5 rounded-3xl border border-indigo-500/10">
                               <div className="bg-indigo-500/10 p-3 rounded-xl border border-indigo-500/20 flex justify-between items-center mb-2">
