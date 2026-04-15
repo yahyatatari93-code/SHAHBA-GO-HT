@@ -195,7 +195,13 @@ export default function App() {
 
   const [allOrders, setAllOrders] = useState([]);
   const [userOrders, setUserOrders] = useState([]);
-  const [dynamicEvents, setDynamicEvents] = useState([]);
+  
+  // 🌟 تم إضافة التخزين المحلي للفعاليات لحل مشكلة اختفائها عند الاختبار 🌟
+  const [dynamicEvents, setDynamicEvents] = useState(() => {
+      const saved = localStorage.getItem('sh_dynamic_events');
+      return saved ? JSON.parse(saved) : [];
+  });
+  
   const [carsList, setCarsList] = useState(DEFAULT_CARS); 
   const [editingCar, setEditingCar] = useState(null); 
   const [bookingItem, setBookingItem] = useState(null);
@@ -317,7 +323,11 @@ export default function App() {
            }
 
            const eventsRes = await fetch(`${API_URL}/events`).catch(()=>null);
-           if (eventsRes && eventsRes.ok) setDynamicEvents(await eventsRes.json());
+           if (eventsRes && eventsRes.ok) {
+               const evts = await eventsRes.json();
+               setDynamicEvents(evts);
+               localStorage.setItem('sh_dynamic_events', JSON.stringify(evts));
+           }
 
            const alertsRes = await fetch(`${API_URL}/alerts`).catch(()=>null);
            if (alertsRes && alertsRes.ok) {
@@ -728,6 +738,7 @@ export default function App() {
     }
   };
 
+  // 🌟 تعديل إضافة الإعلان ليدعم التخزين المحلي والتقويم 🌟
   const addMarketingEvent = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -736,25 +747,47 @@ export default function App() {
         const res = await fetch(`${API_URL}/events`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(eventData) });
         if (res.ok) {
             const newEv = await res.json();
-            setDynamicEvents(prev => [newEv.event, ...prev]);
+            setDynamicEvents(prev => {
+                const updated = [newEv.event, ...prev];
+                localStorage.setItem('sh_dynamic_events', JSON.stringify(updated));
+                return updated;
+            });
             e.target.reset();
             addToast('تم إضافة الإعلان بنجاح', 'success');
         } else {
             addToast('ليس لديك صلاحية', 'error');
         }
     } catch(err) {
-        addToast('تعذر الاتصال بالسيرفر.', 'error');
+        // Fallback for offline/Canvas testing
+        const newEv = { id: 'evt_'+Date.now(), ...eventData, createdAt: Date.now() };
+        setDynamicEvents(prev => {
+            const updated = [newEv, ...prev];
+            localStorage.setItem('sh_dynamic_events', JSON.stringify(updated));
+            return updated;
+        });
+        e.target.reset();
+        addToast('تم إضافة الإعلان بنجاح (محلياً)', 'success');
     }
   };
 
+  // 🌟 تعديل حذف الإعلان ليدعم التخزين المحلي 🌟
   const deleteMarketingEvent = async (id) => {
     try {
         const res = await fetch(`${API_URL}/events/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
         if (res.ok) {
-            setDynamicEvents(prev => prev.filter(ev => ev.id !== id));
+            setDynamicEvents(prev => {
+                const updated = prev.filter(ev => ev.id !== id);
+                localStorage.setItem('sh_dynamic_events', JSON.stringify(updated));
+                return updated;
+            });
         }
     } catch(err) {
-        addToast('تعذر الاتصال بالسيرفر.', 'error');
+        setDynamicEvents(prev => {
+            const updated = prev.filter(ev => ev.id !== id);
+            localStorage.setItem('sh_dynamic_events', JSON.stringify(updated));
+            return updated;
+        });
+        addToast('تم الحذف (محلياً)', 'success');
     }
   };
 
@@ -1055,8 +1088,9 @@ export default function App() {
           </div>
       )}
 
+      {/* 🌟 شريط العروض المتحرك المحسن 🌟 */}
       <div className="bg-emerald-500/10 border-b border-emerald-500/20 py-2.5 overflow-hidden whitespace-nowrap sticky top-0 z-40 backdrop-blur-md">
-        <div className="flex animate-marquee hover:[animation-play-state:paused] space-x-12 space-x-reverse items-center">
+        <div className="flex animate-marquee hover:[animation-play-state:paused] space-x-8 space-x-reverse items-center min-w-max px-10">
             <span className="text-[10px] font-black text-emerald-400 flex items-center gap-4">
                 <Sparkles size={12}/> 
                 نصلك أينما كنت، ونأخذك حيثما تريد • هدفنا راحتك
@@ -1256,10 +1290,19 @@ export default function App() {
                         <div className="space-y-4">
                            <input name="name" required className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-xs text-white text-right outline-none focus:border-emerald-500" placeholder="العنوان" />
                            <textarea name="desc" required className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-xs text-white text-right h-24 outline-none focus:border-emerald-500" placeholder="التفاصيل كاملة..."></textarea>
+                           
+                           {/* 🌟 إضافة التقويم لاختيار تاريخ الفعالية 🌟 */}
                            <div className="grid grid-cols-2 gap-4">
-                               <input name="date" className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-[10px] text-white outline-none focus:border-emerald-500" placeholder="الموعد" />
-                               <input name="price" className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-[10px] text-white outline-none focus:border-emerald-500" placeholder="التكلفة" />
+                               <div className="space-y-1 text-right">
+                                   <label className="text-[9px] text-white/50 font-bold px-1">تاريخ الفعالية</label>
+                                   <input type="date" name="date" min={todayDate} required className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-xs text-transparent valid:text-white outline-none focus:border-emerald-500" />
+                               </div>
+                               <div className="space-y-1 text-right">
+                                   <label className="text-[9px] text-white/50 font-bold px-1">التكلفة (اختياري)</label>
+                                   <input name="price" className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-xs text-white outline-none focus:border-emerald-500" placeholder="مثال: 50,000 ل.س" />
+                               </div>
                            </div>
+                           
                            <select name="postType" required className="w-full bg-[#0B192C] border border-white/10 rounded-2xl p-4 text-xs text-white text-right outline-none focus:border-emerald-500 appearance-none">
                                <option value="event">رحلة / فعالية</option>
                                <option value="offer">عرض إعلاني</option>
