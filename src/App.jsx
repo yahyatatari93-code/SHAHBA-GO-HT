@@ -593,6 +593,7 @@ export default function App() {
         localStorage.setItem('sh-user-name', formValues.name);
         localStorage.setItem('sh-user-phone', phoneStr);
 
+        // اعتراض عملية الإرسال لآجار السيارات
         if (selectedCategory === 'car') {
             const basePriceStr = bookingItem.price || "0";
             const basePrice = parseInt(basePriceStr.replace(/[^0-9]/g, '')) || 0;
@@ -604,7 +605,8 @@ export default function App() {
             setInvoicePreview({
                 ...formValues,
                 totalPrice: total,
-                currency: 'ل.س'
+                currency: 'ل.س',
+                daysCount: daysCount
             });
             return; 
         }
@@ -2159,9 +2161,9 @@ export default function App() {
         }
         .animate-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-marquee { animation: marquee 20s linear infinite; }
+        .animate-marquee { animation: marquee 14s linear infinite; }
         .animate-marquee:hover { animation-play-state: paused; }
-        @keyframes marquee { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        @keyframes marquee { 0% { transform: translateX(100vw); } 100% { transform: translateX(-100%); } }
         select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: left 0.75rem center; background-size: 1rem; }
         /* Scrollbar styles for the terms modal */
         .scrollbar-thin::-webkit-scrollbar { width: 6px; }
