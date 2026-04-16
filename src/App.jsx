@@ -1084,12 +1084,12 @@ export default function App() {
 
       {/* 🌟 شريط العروض المتحرك المحسن والسريع 🌟 */}
       <div className="bg-emerald-500/10 border-b border-emerald-500/20 py-2.5 overflow-hidden whitespace-nowrap sticky top-0 z-40 backdrop-blur-md">
-        <div className="flex animate-marquee hover:[animation-play-state:paused] space-x-8 space-x-reverse items-center min-w-max px-10">
-            <span className="text-[10px] font-black text-emerald-400 flex items-center gap-4">
-                <Sparkles size={12}/> 
+        <div className="flex animate-marquee hover:[animation-play-state:paused] space-x-8 space-x-reverse items-center w-max px-10">
+            <span className="text-[10px] font-black text-emerald-400 flex items-center gap-4 shrink-0">
+                <Sparkles size={12} className="shrink-0"/> 
                 نصلك أينما كنت، ونأخذك حيثما تريد • هدفنا راحتك
-                <span className="mx-4 text-white/30 font-light">|</span>
-                <Sparkles size={12}/> 
+                <span className="mx-4 text-white/30 font-light shrink-0">|</span>
+                <Sparkles size={12} className="shrink-0"/> 
                 كل ما تحتاجه في عالم السياحة والسفر
             </span>
             {dynamicEvents.map(ev => (
@@ -1101,10 +1101,10 @@ export default function App() {
                         setSelectedCategory('events');
                         setBookingItem(ev);
                     }}
-                    className="text-[10px] font-black text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)] flex items-center gap-2 cursor-pointer hover:brightness-125 transition-all"
+                    className="text-[10px] font-black text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)] flex items-center gap-2 cursor-pointer hover:brightness-125 transition-all shrink-0"
                 >
-                    <span className="mx-4 text-white/30 font-light drop-shadow-none">|</span>
-                    {ev.postType === 'offer' ? <Megaphone size={12}/> : <MapPin size={12}/>} 
+                    <span className="mx-4 text-white/30 font-light drop-shadow-none shrink-0">|</span>
+                    {ev.postType === 'offer' ? <Megaphone size={12} className="shrink-0"/> : <MapPin size={12} className="shrink-0"/>} 
                     {ev.name}
                 </span>
             ))}
@@ -1901,7 +1901,7 @@ export default function App() {
                               </div>
 
                               <div className="pt-2">
-                                 <label className="text-[9px] text-indigo-500/50 font-bold block mb-2">خدمات إضافية (اختياري)</label>
+                                 <label className="text-[9px] text-indigo-500/50 font-bold mb-2 block text-right">خدمات إضافية (اختياري)</label>
                                  <div className="grid grid-cols-3 gap-2">
                                     <label className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all cursor-pointer ${transitLive.meal ? 'bg-indigo-500 border-indigo-400 text-white' : 'bg-[#0B192C] border-white/10 text-white/50 hover:border-indigo-500/50'}`}>
                                         <input type="checkbox" name="meal" checked={transitLive.meal} onChange={e => setTransitLive({...transitLive, meal: e.target.checked})} className="hidden"/>
@@ -1937,7 +1937,7 @@ export default function App() {
                                      </div>
                                  </div>
                               )}
-                              <label className="text-[9px] text-slate-400 font-bold">يرجى كتابة التفاصيل الدقيقة للمعاملة أو الأوراق:</label>
+                              <label className="text-[9px] text-slate-400 font-bold text-right block">يرجى كتابة التفاصيل الدقيقة للمعاملة أو الأوراق:</label>
                               <textarea name="serviceDetails" required defaultValue={bookingItem?.serviceDetails || ""} className="w-full bg-[#0B192C] border border-white/10 rounded-xl p-3 text-xs text-white text-right h-24 outline-none focus:border-slate-500" placeholder="تفاصيل الخدمة المطلوبة..."></textarea>
                            </div>
                          )}
@@ -1965,11 +1965,11 @@ export default function App() {
                          {selectedCategory === 'bus' && selectedBusType === 'leisure' && (
                            <div className="space-y-3 p-4 bg-emerald-500/5 rounded-3xl border border-emerald-500/10">
                               <div className="grid grid-cols-2 gap-3">
-                                 <div className="space-y-1">
+                                 <div className="space-y-1 text-right">
                                    <label className="text-[9px] text-white/30 mr-2">تاريخ الرحلة</label>
                                    <input name="tripDate" type="date" min={todayDate} required defaultValue={bookingItem?.tripDate || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-emerald-500" />
                                  </div>
-                                 <div className="space-y-1">
+                                 <div className="space-y-1 text-right">
                                    <label className="text-[9px] text-white/30 mr-2">وقت الانطلاق</label>
                                    <input name="tripTime" type="time" required defaultValue={bookingItem?.tripTime || ""} className="w-full bg-[#0B192C] border border-white/5 rounded-xl p-3 text-xs text-transparent valid:text-white outline-none focus:border-emerald-500" />
                                  </div>
@@ -2077,8 +2077,8 @@ export default function App() {
                               <div className="flex justify-between text-xs border-b border-white/5 pb-2"><span className="text-white/60 font-bold">موعد الرحلة:</span> <span className="font-black">{invoicePreview.tripDate} | {invoicePreview.tripTime}</span></div>
                               
                               <div className="pt-2">
-                                  <span className="text-[10px] text-white/50 font-bold block mb-2">الخدمات الإضافية:</span>
-                                  <div className="flex flex-wrap gap-2">
+                                  <span className="text-[10px] text-white/50 font-bold mb-2 block text-right">الخدمات الإضافية:</span>
+                                  <div className="flex flex-wrap gap-2 justify-end">
                                       {invoicePreview.bags > 0 && <span className="bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded-lg text-[9px] font-bold border border-indigo-500/30">حقائب: {invoicePreview.bags}</span>}
                                       {invoicePreview.meal && <span className="bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded-lg text-[9px] font-bold border border-indigo-500/30">وجبة طعام</span>}
                                       {invoicePreview.internet && <span className="bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded-lg text-[9px] font-bold border border-indigo-500/30">إنترنت Wi-Fi</span>}
