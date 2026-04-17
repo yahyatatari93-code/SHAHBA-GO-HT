@@ -9,7 +9,7 @@ import {
   UserCheck, UserX, ClipboardList, Trash2,
   RotateCcw, Baby, Tent, Ship,
   PartyPopper, Plane, FileText, Globe, CarFront,
-  Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock, Download, Share, MoreVertical, BellRing, Phone, QrCode, Printer, Wifi, Utensils
+  Wallet, Store, Languages, FileCheck, Truck, MessageCircle, ChevronRight, AlertCircle, Info, CheckCircle2, LogIn, Filter, Gift, Award, Coffee, Shirt, Smile, LogOut, Mail, Lock, Download, Share, MoreVertical, BellRing, Phone, QrCode, Printer, Wifi, Utensils, BarChart3
 } from 'lucide-react';
 
 // ==========================================
@@ -153,7 +153,8 @@ export default function App() {
     (user.phoneNumber && ADMIN_ACCOUNTS.includes(user.phoneNumber))
   );
 
-  const [adminTab, setAdminTab] = useState('orders'); 
+  const [adminTab, setAdminTab] = useState('analytics'); // جعلت الإحصائيات هي التبويب الافتراضي للإدارة
+
   const [orderFilter, setOrderFilter] = useState('pending'); 
 
   const formatDateTime = (timestamp) => {
@@ -327,7 +328,6 @@ export default function App() {
                const evts = await eventsRes.json();
                if (Array.isArray(evts)) {
                    setDynamicEvents(prev => {
-                       // 🛡️ حماية البيانات المحلية من المسح في بيئة الاختبار Canvas
                        if (evts.length < prev.length) return prev;
                        localStorage.setItem('sh_dynamic_events', JSON.stringify(evts));
                        return evts;
@@ -349,6 +349,41 @@ export default function App() {
     const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
   }, [user]);
+
+  // 🌟 محرك الإحصائيات الذكي (يجمع البيانات لحظياً من الطلبات) 🌟
+  const analyticsData = useMemo(() => {
+      const approvedOrders = allOrders.filter(o => o.status === 'approved');
+      const pendingOrders = allOrders.filter(o => o.status === 'pending');
+
+      let totalSYP = 0;
+      let totalUSD = 0;
+
+      approvedOrders.forEach(o => {
+          if (o.calculatedTotal) {
+              if (o.calculatedCurrency === '$') totalUSD += Number(o.calculatedTotal);
+              else totalSYP += Number(o.calculatedTotal);
+          }
+      });
+
+      const categoryCounts = {
+          car: 0, transit: 0, hotel: 0, flights: 0, bus: 0, services: 0, events: 0
+      };
+
+      allOrders.forEach(o => {
+          if (categoryCounts[o.serviceType] !== undefined) {
+              categoryCounts[o.serviceType]++;
+          }
+      });
+
+      return {
+          totalOrders: allOrders.length,
+          approvedCount: approvedOrders.length,
+          pendingCount: pendingOrders.length,
+          totalSYP,
+          totalUSD,
+          categoryCounts
+      };
+  }, [allOrders]);
 
   const notifications = useMemo(() => {
       let notifs = [];
@@ -451,7 +486,6 @@ export default function App() {
       }
   };
 
-  // 🌟 نظام المصادقة الجديد (اللوحة الشاملة) 🌟
   const handleAuthSubmit = async (e) => {
       e.preventDefault();
       setAuthError('');
@@ -460,7 +494,6 @@ export default function App() {
       if (authMode === 'login') {
           setAuthLoading(true);
           try {
-              // محاولة الاتصال بالسيرفر (API)
               const res = await fetch(`${API_URL}/auth/login`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -477,7 +510,6 @@ export default function App() {
                   setAuthError(data.error || 'بيانات الدخول غير صحيحة!');
               }
           } catch (error) {
-              // نظام الطوارئ للمحاكي (Canvas)
               const accountFound = dbUsers.find(u => 
                   (authTab === 'email' && u.email === authEmail && u.password === authPassword) || 
                   (authTab === 'phone' && u.phone === authPhone && u.password === authPassword)
@@ -494,7 +526,6 @@ export default function App() {
           }
           setAuthLoading(false);
       } else {
-          // عملية إنشاء الحساب (الخطوة 1: إرسال الرمز)
           if (!otpSent) {
               const exists = dbUsers.find(u => (authTab === 'email' && u.email === authEmail) || (authTab === 'phone' && u.phone === authPhone));
               if (exists) {
@@ -523,17 +554,16 @@ export default function App() {
               }
               setAuthLoading(false);
           } else {
-              // الخطوة 2: تأكيد الرمز وإنشاء الحساب
               setAuthLoading(true);
               if (otpCode !== '123456' && otpCode.length > 0) {
-                 // سيتم التحقق من الرمز الحقيقي هنا عند ربط الـ API بشكل كامل
+                 // Verify real OTP here later
               }
               
               const newUser = { 
                   uid: 'u_' + Date.now(), 
                   email: authTab === 'email' ? authEmail : null, 
                   phone: authTab === 'phone' ? authPhone : null, 
-                  password: authPassword, // تم إضافة كلمة المرور
+                  password: authPassword,
                   isGuest: false,
                   role: 'user'
               };
@@ -548,7 +578,6 @@ export default function App() {
       }
   };
 
-  // الدخول كزائر
   const handleGuestLogin = () => {
       const guestUser = { uid: 'guest_' + Date.now(), isGuest: true };
       setUser(guestUser);
@@ -559,7 +588,7 @@ export default function App() {
   const executeLogout = () => {
       localStorage.removeItem('sh_user');
       localStorage.removeItem('sh_token');
-      setUser(null); // سيتم توجيهه فوراً لشاشة الدخول
+      setUser(null); 
       setShowAdminPanel(false);
       setActiveView('main');
       setLogoutConfirm(false);
@@ -609,7 +638,6 @@ export default function App() {
         localStorage.setItem('sh-user-name', formValues.name);
         localStorage.setItem('sh-user-phone', phoneStr);
 
-        // اعتراض عملية الإرسال لآجار السيارات
         if (selectedCategory === 'car') {
             const basePriceStr = bookingItem.price || "0";
             const basePrice = parseInt(basePriceStr.replace(/[^0-9]/g, '')) || 0;
@@ -695,7 +723,6 @@ export default function App() {
 
   const handleRedeemReward = async (reward) => {
       if (isGuest) {
-          // إذا كان زائر، نوجهه لشاشة الدخول بمسح اليوزر
           localStorage.removeItem('sh_user');
           setUser(null);
           return;
@@ -744,14 +771,12 @@ export default function App() {
     }
   };
 
-  // 🌟 حماية الفعاليات (الإضافات الفورية الآمنة) 🌟
   const addMarketingEvent = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
     const eventData = Object.fromEntries(formData.entries());
     const newLocalEvent = { id: 'evt_' + Date.now(), ...eventData, createdAt: Date.now() };
 
-    // 1. إضافة مباشرة ومؤكدة محلياً لضمان عدم اختفائها في Canvas
     setDynamicEvents(prev => {
         const updated = [newLocalEvent, ...prev];
         localStorage.setItem('sh_dynamic_events', JSON.stringify(updated));
@@ -760,7 +785,6 @@ export default function App() {
     e.target.reset();
     addToast('تم إدراج الإعلان بنجاح', 'success');
 
-    // 2. إرسال صامت للسيرفر في الخلفية
     try {
         await fetch(`${API_URL}/events`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(newLocalEvent) });
     } catch(err) {
@@ -769,7 +793,6 @@ export default function App() {
   };
 
   const deleteMarketingEvent = async (id) => {
-    // 1. حذف مؤكد ومباشر محلياً
     setDynamicEvents(prev => {
         const updated = prev.filter(ev => ev.id !== id);
         localStorage.setItem('sh_dynamic_events', JSON.stringify(updated));
@@ -777,7 +800,6 @@ export default function App() {
     });
     addToast('تم حذف الإعلان', 'success');
 
-    // 2. إرسال أمر الحذف للسيرفر
     try {
         await fetch(`${API_URL}/events/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
     } catch(err) {
@@ -1218,13 +1240,66 @@ export default function App() {
       <main className="p-4 max-w-5xl mx-auto">
         {showAdminPanel && isUserAdmin ? (
           <div className="space-y-6 animate-in">
-             <div className="flex bg-[#0F172A] p-1.5 rounded-2xl border border-white/5 mb-4 gap-1">
-                <button onClick={() => setAdminTab('orders')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-bold ${adminTab === 'orders' ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500'}`}>الطلبات</button>
-                <button onClick={() => setAdminTab('marketing')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-bold ${adminTab === 'marketing' ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500'}`}>الإعلانات</button>
-                <button onClick={() => setAdminTab('alerts')} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-bold ${adminTab === 'alerts' ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500'}`}><BellRing size={14}/> التنبيهات</button>
+             {/* 🌟 تبويبات الإدارة المحسنة 🌟 */}
+             <div className="flex bg-[#0F172A] p-1.5 rounded-2xl border border-white/5 mb-4 gap-1 overflow-x-auto scrollbar-hide">
+                <button onClick={() => setAdminTab('analytics')} className={`flex-1 min-w-[70px] py-3 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-bold transition-all ${adminTab === 'analytics' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-lg' : 'text-slate-500 hover:text-white'}`}><BarChart3 size={14}/> إحصائيات</button>
+                <button onClick={() => setAdminTab('orders')} className={`flex-1 min-w-[70px] py-3 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-bold transition-all ${adminTab === 'orders' ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>الطلبات</button>
+                <button onClick={() => setAdminTab('marketing')} className={`flex-1 min-w-[70px] py-3 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-bold transition-all ${adminTab === 'marketing' ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>الإعلانات</button>
+                <button onClick={() => setAdminTab('alerts')} className={`flex-1 min-w-[70px] py-3 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-bold transition-all ${adminTab === 'alerts' ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}><BellRing size={14}/> تنبيهات</button>
              </div>
 
-             {adminTab === 'orders' ? (
+             {/* 🌟 قسم الإحصائيات الجديد 🌟 */}
+             {adminTab === 'analytics' ? (
+                <div className="space-y-6 max-w-2xl mx-auto animate-in slide-in-from-right-4 pb-10">
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-[#112240] p-5 rounded-3xl border border-white/5 shadow-lg flex flex-col items-center justify-center text-center">
+                            <span className="text-3xl font-black text-emerald-400">{analyticsData.approvedCount}</span>
+                            <span className="text-[10px] text-white/50 font-bold mt-1 uppercase tracking-widest">طلبات منجزة</span>
+                        </div>
+                        <div className="bg-[#112240] p-5 rounded-3xl border border-white/5 shadow-lg flex flex-col items-center justify-center text-center">
+                            <span className="text-3xl font-black text-amber-400">{analyticsData.pendingCount}</span>
+                            <span className="text-[10px] text-white/50 font-bold mt-1 uppercase tracking-widest">قيد الانتظار</span>
+                        </div>
+                        <div className="bg-gradient-to-br from-[#112240] to-[#0B192C] p-5 rounded-3xl border border-emerald-500/20 shadow-lg flex flex-col items-center justify-center text-center col-span-2 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl"></div>
+                            <span className="text-[10px] text-emerald-400/80 font-bold mb-1">الإيرادات التقديرية (للطلبات المنجزة)</span>
+                            <div className="flex gap-6 items-end mt-2 z-10">
+                                <div className="text-center">
+                                    <span className="text-2xl font-black text-white">{new Intl.NumberFormat('ar-SY').format(analyticsData.totalSYP)}</span>
+                                    <span className="text-[10px] text-white/40 block">ل.س</span>
+                                </div>
+                                <div className="w-px h-8 bg-white/10"></div>
+                                <div className="text-center">
+                                    <span className="text-2xl font-black text-white">{new Intl.NumberFormat('ar-SY').format(analyticsData.totalUSD)}</span>
+                                    <span className="text-[10px] text-white/40 block">دولار ($)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-[#112240] p-6 rounded-3xl border border-white/5 shadow-lg mt-6">
+                        <h4 className="text-sm font-black text-white mb-6 text-right border-b border-white/5 pb-3">الحجوزات حسب القسم</h4>
+                        <div className="space-y-4">
+                            {CATEGORIES.map(cat => {
+                                const count = analyticsData.categoryCounts[cat.id] || 0;
+                                const maxCount = Math.max(...Object.values(analyticsData.categoryCounts), 1);
+                                const percentage = (count / maxCount) * 100;
+                                return (
+                                    <div key={cat.id} className="flex items-center gap-4">
+                                        <div className="w-20 text-right text-[10px] font-bold text-white/70 truncate">{cat.title}</div>
+                                        <div className="flex-1 h-3 bg-[#0B192C] rounded-full overflow-hidden flex items-center border border-white/5 shadow-inner">
+                                            <div className="h-full bg-gradient-to-l from-emerald-400 to-teal-600 rounded-full transition-all duration-1000" style={{ width: `${percentage}%` }}></div>
+                                        </div>
+                                        <div className="w-8 text-left text-[11px] font-black text-emerald-400">{count}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+
+             ) : adminTab === 'orders' ? (
                <div className="space-y-6">
                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide px-2">
                      {[
@@ -2077,7 +2152,7 @@ export default function App() {
                               <div className="flex justify-between text-xs border-b border-white/5 pb-2"><span className="text-white/60 font-bold">موعد الرحلة:</span> <span className="font-black">{invoicePreview.tripDate} | {invoicePreview.tripTime}</span></div>
                               
                               <div className="pt-2">
-                                  <span className="text-[10px] text-white/50 font-bold mb-2 block text-right">الخدمات الإضافية:</span>
+                                  <span className="text-[10px] text-white/50 font-bold block mb-2 block text-right">الخدمات الإضافية:</span>
                                   <div className="flex flex-wrap gap-2 justify-end">
                                       {invoicePreview.bags > 0 && <span className="bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded-lg text-[9px] font-bold border border-indigo-500/30">حقائب: {invoicePreview.bags}</span>}
                                       {invoicePreview.meal && <span className="bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded-lg text-[9px] font-bold border border-indigo-500/30">وجبة طعام</span>}
