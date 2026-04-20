@@ -1160,14 +1160,7 @@ export default function App() {
       {/* 🌟 شريط العروض المتحرك المحسن والسريع 🌟 */}
       <div className="bg-emerald-500/10 border-b border-emerald-500/20 py-2.5 overflow-hidden whitespace-nowrap sticky top-0 z-40 backdrop-blur-md">
         <div className="flex animate-marquee hover:[animation-play-state:paused] space-x-8 space-x-reverse items-center w-max px-10">
-            <span className="text-[10px] font-black text-emerald-400 flex items-center gap-4 shrink-0">
-                <Sparkles size={12} className="shrink-0"/> 
-                نصلك أينما كنت، ونأخذك حيثما تريد • هدفنا راحتك
-                <span className="mx-4 text-white/30 font-light shrink-0">|</span>
-                <Sparkles size={12} className="shrink-0"/> 
-                كل ما تحتاجه في عالم السياحة والسفر
-            </span>
-            {dynamicEvents.map(ev => (
+            {dynamicEvents.length > 0 ? dynamicEvents.map((ev, index) => (
                 <span 
                     key={ev.id} 
                     onClick={() => {
@@ -1178,11 +1171,15 @@ export default function App() {
                     }}
                     className="text-[10px] font-black text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)] flex items-center gap-2 cursor-pointer hover:brightness-125 transition-all shrink-0"
                 >
-                    <span className="mx-4 text-white/30 font-light drop-shadow-none shrink-0">|</span>
+                    {index > 0 && <span className="mx-4 text-white/30 font-light drop-shadow-none shrink-0">|</span>}
                     {ev.postType === 'offer' ? <Megaphone size={12} className="shrink-0"/> : <MapPin size={12} className="shrink-0"/>} 
                     {ev.name}
                 </span>
-            ))}
+            )) : (
+                <span className="text-[10px] font-black text-emerald-400/50 flex items-center gap-4 shrink-0">
+                    <Sparkles size={12} className="shrink-0"/> ترقبوا أحدث العروض والرحلات قريباً
+                </span>
+            )}
         </div>
       </div>
 
@@ -2341,7 +2338,7 @@ export default function App() {
         }
         .animate-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-marquee { animation: marquee 9s linear infinite; }
+        .animate-marquee { animation: marquee 11s linear infinite; }
         .animate-marquee:hover { animation-play-state: paused; }
         @keyframes marquee { 0% { transform: translateX(-100%); } 100% { transform: translateX(100vw); } }
         select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: left 0.75rem center; background-size: 1rem; }
