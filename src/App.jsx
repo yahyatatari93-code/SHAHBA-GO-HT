@@ -138,9 +138,17 @@ export default function App() {
   const [selectedBusType, setSelectedBusType] = useState(null);
   const [hasKidsState, setHasKidsState] = useState('no'); 
   
+  // ✅ (النقطة 8) حماية الـ localStorage بـ try/catch
   const [user, setUser] = useState(() => {
      const savedUser = localStorage.getItem('sh_user');
-     return savedUser ? JSON.parse(savedUser) : null;
+     if (!savedUser) return null;
+     try {
+         return JSON.parse(savedUser);
+     } catch (e) {
+         console.error("Failed to parse user data from localStorage", e);
+         localStorage.removeItem('sh_user');
+         return null;
+     }
   });
   
   const [showAdminPanel, setShowAdminPanel] = useState(false);
@@ -152,7 +160,6 @@ export default function App() {
   );
 
   const [adminTab, setAdminTab] = useState('analytics'); 
-
   const [orderFilter, setOrderFilter] = useState('pending'); 
 
   const formatDateTime = (timestamp) => {
@@ -196,7 +203,12 @@ export default function App() {
   
   const [dynamicEvents, setDynamicEvents] = useState(() => {
       const saved = localStorage.getItem('sh_dynamic_events');
-      return saved ? JSON.parse(saved) : [];
+      if (!saved) return [];
+      try {
+          return JSON.parse(saved);
+      } catch (e) {
+          return [];
+      }
   });
   
   const [carsList, setCarsList] = useState(DEFAULT_CARS); 
@@ -218,7 +230,12 @@ export default function App() {
   
   const [readNotifs, setReadNotifs] = useState(() => {
       const saved = localStorage.getItem('sh_read_notifs');
-      return saved ? JSON.parse(saved) : [];
+      if (!saved) return [];
+      try {
+          return JSON.parse(saved);
+      } catch (e) {
+          return [];
+      }
   });
 
   const [printingOrder, setPrintingOrder] = useState(null); 
@@ -277,7 +294,10 @@ export default function App() {
   useEffect(() => {
       if (globalAlerts && globalAlerts.length > 0 && !isUserAdmin) {
           const latest = globalAlerts[0];
-          const seen = localStorage.getItem('seen_alerts') ? JSON.parse(localStorage.getItem('seen_alerts')) : [];
+          const savedSeen = localStorage.getItem('seen_alerts');
+          let seen = [];
+          try { seen = savedSeen ? JSON.parse(savedSeen) : []; } catch(e) {}
+          
           if (!seen.includes(latest.id)) {
               setSelectedNotification({
                   id: latest.id,
@@ -345,7 +365,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [user]);
 
-  // 🌟 محرك الإحصائيات الذكي المحسن (يجمع بيانات تفصيلية) 🌟
   const analyticsData = useMemo(() => {
       const approvedOrders = allOrders.filter(o => o.status === 'approved');
       const pendingOrders = allOrders.filter(o => o.status === 'pending');
@@ -364,7 +383,6 @@ export default function App() {
           car: 0, transit: 0, hotel: 0, flights: 0, bus: 0, services: 0, events: 0
       };
 
-      // كائنات لجمع الإحصائيات التفصيلية
       const carStats = {};
       const transitDestStats = {};
       const transitVehicleStats = {};
@@ -376,12 +394,10 @@ export default function App() {
               categoryCounts[o.serviceType]++;
           }
 
-          // تجميع إحصائيات السيارات
           if (o.serviceType === 'car' && o.serviceTitle) {
               const carName = o.serviceTitle.replace('آجار سيارة: ', '').trim();
               carStats[carName] = (carStats[carName] || 0) + 1;
           }
-          // تجميع إحصائيات النقل البري (وجهات ومركبات)
           if (o.serviceType === 'transit') {
               if (o.toLocation) {
                   transitDestStats[o.toLocation] = (transitDestStats[o.toLocation] || 0) + 1;
@@ -389,17 +405,14 @@ export default function App() {
               const vName = o.serviceTitle ? o.serviceTitle.replace('طلب حجز - ', '').trim() : 'غير محدد';
               transitVehicleStats[vName] = (transitVehicleStats[vName] || 0) + 1;
           }
-          // تجميع إحصائيات الفنادق
           if (o.serviceType === 'hotel' && o.hotelName) {
               hotelStats[o.hotelName] = (hotelStats[o.hotelName] || 0) + 1;
           }
-          // تجميع إحصائيات الخدمات
           if (o.serviceType === 'services' && o.serviceTitle) {
               serviceStats[o.serviceTitle] = (serviceStats[o.serviceTitle] || 0) + 1;
           }
       });
 
-      // دالة مساعدة لترتيب النتائج من الأكثر طلباً للأقل
       const sortStats = (statObj) => Object.entries(statObj).sort((a, b) => b[1] - a[1]);
 
       return {
@@ -475,7 +488,12 @@ export default function App() {
 
   useEffect(() => {
       if ("Notification" in window && Notification.permission === "granted") {
-          const osNotified = JSON.parse(localStorage.getItem('sh_os_notified') || '[]');
+          let osNotified = [];
+          try {
+              const saved = localStorage.getItem('sh_os_notified');
+              osNotified = saved ? JSON.parse(saved) : [];
+          } catch(e){}
+          
           let updated = false;
 
           notifications.forEach(n => {
@@ -521,7 +539,12 @@ export default function App() {
   const handleAuthSubmit = async (e) => {
       e.preventDefault();
       setAuthError('');
-      const dbUsers = JSON.parse(localStorage.getItem('sh_db_users') || '[]');
+      
+      let dbUsers = [];
+      try {
+          const savedUsers = localStorage.getItem('sh_db_users');
+          dbUsers = savedUsers ? JSON.parse(savedUsers) : [];
+      } catch(e){}
 
       if (authMode === 'login') {
           setAuthLoading(true);
@@ -617,6 +640,7 @@ export default function App() {
       addToast('تم الدخول كزائر للتصفح', 'info');
   };
 
+  // ✅ (النقطة 6) توحيد مسح الجلسات باستخدام دالة executeLogout
   const executeLogout = () => {
       localStorage.removeItem('sh_user');
       localStorage.removeItem('sh_token');
@@ -678,11 +702,13 @@ export default function App() {
             const daysCount = parseInt(formValues.durationCount || 7);
             const total = dailyRate * daysCount;
             
+            // ✅ (النقطة 3) إضافة isWithDriver لـ invoicePreview
             setInvoicePreview({
                 ...formValues,
                 totalPrice: total,
                 currency: 'ل.س',
-                daysCount: daysCount
+                daysCount: daysCount,
+                isWithDriver: isWithDriver 
             });
             return; 
         }
@@ -755,8 +781,8 @@ export default function App() {
 
   const handleRedeemReward = async (reward) => {
       if (isGuest) {
-          localStorage.removeItem('sh_user');
-          setUser(null);
+          // ✅ (النقطة 6) توحيد مسح الجلسة
+          executeLogout();
           return;
       }
       if (userPoints >= reward.points) {
@@ -943,7 +969,6 @@ export default function App() {
     </div>
   );
 
-  // 🌟 مكون مصغر لعرض الإحصائيات التفصيلية 🌟
   const renderMiniStat = (title, statsArray, IconComponent, emptyMsg) => (
       <div className="bg-[#112240] p-4 rounded-[2rem] border border-white/5 shadow-lg flex flex-col">
           <h5 className="text-[11px] font-black text-emerald-400 mb-3 border-b border-white/5 pb-2 flex items-center justify-end gap-1.5">
@@ -1253,8 +1278,7 @@ export default function App() {
             {(!isUserAdmin || !showAdminPanel) && (
                 <button onClick={() => {
                     if (isGuest) {
-                        localStorage.removeItem('sh_user');
-                        setUser(null); // توجيه لشاشة الدخول
+                        executeLogout(); // ✅ (النقطة 6)
                     } else {
                         setActiveView('wallet'); 
                         setSelectedCategory(null);
@@ -1274,8 +1298,7 @@ export default function App() {
 
             {isGuest ? (
                 <button onClick={() => {
-                    localStorage.removeItem('sh_user');
-                    setUser(null); // توجيه لشاشة الدخول الفخمة
+                    executeLogout(); // ✅ (النقطة 6)
                 }} className="px-3 py-2 rounded-xl flex items-center gap-2 text-[10px] font-bold border border-white/10 bg-white/5 text-slate-300 hover:text-white transition-colors">
                     <LogIn size={14} /> دخول
                 </button>
@@ -1484,7 +1507,8 @@ export default function App() {
             {activeView === 'main' && (
               <div className="space-y-6 max-w-xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <div className="relative rounded-[3rem] overflow-hidden aspect-[16/9] border border-white/5 shadow-2xl">
-                   <img src="/main-bg.jpg?v=3" className="w-full h-full object-cover opacity-50" alt="Travel Hero"/>
+                   {/* ✅ (النقطة 9) إضافة onError لصورة الشاشة الرئيسية */}
+                   <img src="/main-bg.jpg?v=3" onError={(e) => { e.target.onerror = null; e.target.src='https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800'; }} className="w-full h-full object-cover opacity-50" alt="Travel Hero"/>
                    <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-transparent"></div>
                    <div className="absolute top-6 left-6"><HTLogo /></div>
                    
@@ -2300,7 +2324,7 @@ export default function App() {
                   <p className="text-xs text-emerald-600 font-bold mb-8 bg-emerald-50 p-2 rounded-lg">🎁 تم إضافة 25 نقطة لمحفظتك!</p>
               )}
               {(!bookingItem?.isEditMode && isGuest) && (
-                  <p className="text-[10px] text-rose-600 font-bold mb-8 bg-rose-50 p-2 rounded-lg cursor-pointer hover:bg-rose-100" onClick={() => {setShowSuccessCard(false); setAuthModal('signup');}}>
+                  <p className="text-[10px] text-rose-600 font-bold mb-8 bg-rose-50 p-2 rounded-lg cursor-pointer hover:bg-rose-100" onClick={() => {setShowSuccessCard(false); setAuthMode('signup');}}>
                       💡 فاتتك 25 نقطة! أنشئ حسابك الآن لتبدأ بجمع النقاط.
                   </p>
               )}
