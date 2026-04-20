@@ -130,7 +130,6 @@ const HT_REWARDS = [
 ];
 
 export default function App() {
-  // 🌟 إدارة حالة الجلسة والشاشات 🌟
   const [showSplash, setShowSplash] = useState(true);
   const [activeView, setActiveView] = useState('main'); 
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -139,7 +138,6 @@ export default function App() {
   const [selectedBusType, setSelectedBusType] = useState(null);
   const [hasKidsState, setHasKidsState] = useState('no'); 
   
-  // 🌟 تهيئة المستخدم من الـ Local Storage 🌟
   const [user, setUser] = useState(() => {
      const savedUser = localStorage.getItem('sh_user');
      return savedUser ? JSON.parse(savedUser) : null;
@@ -153,7 +151,7 @@ export default function App() {
     (user.phoneNumber && ADMIN_ACCOUNTS.includes(user.phoneNumber))
   );
 
-  const [adminTab, setAdminTab] = useState('analytics'); // جعلت الإحصائيات هي التبويب الافتراضي للإدارة
+  const [adminTab, setAdminTab] = useState('analytics'); 
 
   const [orderFilter, setOrderFilter] = useState('pending'); 
 
@@ -181,8 +179,7 @@ export default function App() {
       };
   };
 
-  // 🌟 حالات نظام المصادقة الجديد 🌟
-  const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
+  const [authMode, setAuthMode] = useState('login'); 
   const [authTab, setAuthTab] = useState('email'); 
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
@@ -197,7 +194,6 @@ export default function App() {
   const [allOrders, setAllOrders] = useState([]);
   const [userOrders, setUserOrders] = useState([]);
   
-  // 🌟 تم إضافة التخزين المحلي للفعاليات لحل مشكلة اختفائها عند الاختبار 🌟
   const [dynamicEvents, setDynamicEvents] = useState(() => {
       const saved = localStorage.getItem('sh_dynamic_events');
       return saved ? JSON.parse(saved) : [];
@@ -264,7 +260,6 @@ export default function App() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 6000);
   };
 
-  // إعدادات الـ Splash Screen
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 2500); 
     return () => clearTimeout(timer);
@@ -350,7 +345,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [user]);
 
-  // 🌟 محرك الإحصائيات الذكي (يجمع البيانات لحظياً من الطلبات) 🌟
+  // 🌟 محرك الإحصائيات الذكي المحسن (يجمع بيانات تفصيلية) 🌟
   const analyticsData = useMemo(() => {
       const approvedOrders = allOrders.filter(o => o.status === 'approved');
       const pendingOrders = allOrders.filter(o => o.status === 'pending');
@@ -369,11 +364,43 @@ export default function App() {
           car: 0, transit: 0, hotel: 0, flights: 0, bus: 0, services: 0, events: 0
       };
 
+      // كائنات لجمع الإحصائيات التفصيلية
+      const carStats = {};
+      const transitDestStats = {};
+      const transitVehicleStats = {};
+      const hotelStats = {};
+      const serviceStats = {};
+
       allOrders.forEach(o => {
           if (categoryCounts[o.serviceType] !== undefined) {
               categoryCounts[o.serviceType]++;
           }
+
+          // تجميع إحصائيات السيارات
+          if (o.serviceType === 'car' && o.serviceTitle) {
+              const carName = o.serviceTitle.replace('آجار سيارة: ', '').trim();
+              carStats[carName] = (carStats[carName] || 0) + 1;
+          }
+          // تجميع إحصائيات النقل البري (وجهات ومركبات)
+          if (o.serviceType === 'transit') {
+              if (o.toLocation) {
+                  transitDestStats[o.toLocation] = (transitDestStats[o.toLocation] || 0) + 1;
+              }
+              const vName = o.serviceTitle ? o.serviceTitle.replace('طلب حجز - ', '').trim() : 'غير محدد';
+              transitVehicleStats[vName] = (transitVehicleStats[vName] || 0) + 1;
+          }
+          // تجميع إحصائيات الفنادق
+          if (o.serviceType === 'hotel' && o.hotelName) {
+              hotelStats[o.hotelName] = (hotelStats[o.hotelName] || 0) + 1;
+          }
+          // تجميع إحصائيات الخدمات
+          if (o.serviceType === 'services' && o.serviceTitle) {
+              serviceStats[o.serviceTitle] = (serviceStats[o.serviceTitle] || 0) + 1;
+          }
       });
+
+      // دالة مساعدة لترتيب النتائج من الأكثر طلباً للأقل
+      const sortStats = (statObj) => Object.entries(statObj).sort((a, b) => b[1] - a[1]);
 
       return {
           totalOrders: allOrders.length,
@@ -381,7 +408,12 @@ export default function App() {
           pendingCount: pendingOrders.length,
           totalSYP,
           totalUSD,
-          categoryCounts
+          categoryCounts,
+          carStats: sortStats(carStats),
+          transitDestStats: sortStats(transitDestStats),
+          transitVehicleStats: sortStats(transitVehicleStats),
+          hotelStats: sortStats(hotelStats),
+          serviceStats: sortStats(serviceStats)
       };
   }, [allOrders]);
 
@@ -911,6 +943,27 @@ export default function App() {
     </div>
   );
 
+  // 🌟 مكون مصغر لعرض الإحصائيات التفصيلية 🌟
+  const renderMiniStat = (title, statsArray, IconComponent, emptyMsg) => (
+      <div className="bg-[#112240] p-4 rounded-[2rem] border border-white/5 shadow-lg flex flex-col">
+          <h5 className="text-[11px] font-black text-emerald-400 mb-3 border-b border-white/5 pb-2 flex items-center justify-end gap-1.5">
+              {title} <IconComponent size={14}/>
+          </h5>
+          {statsArray.length === 0 ? (
+              <p className="text-[9px] text-white/30 text-center py-4 font-bold">{emptyMsg}</p>
+          ) : (
+              <div className="space-y-2 flex-1">
+                  {statsArray.slice(0, 5).map(([name, count], i) => (
+                      <div key={i} className="flex justify-between items-center text-[10px] bg-white/5 p-2 rounded-xl">
+                          <span className="font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg">{count}</span>
+                          <span className="text-white/80 truncate w-3/4 text-right font-bold">{name}</span>
+                      </div>
+                  ))}
+              </div>
+          )}
+      </div>
+  );
+
   // 1. شاشة البداية (Splash Screen)
   if (showSplash) {
     return (
@@ -1248,10 +1301,11 @@ export default function App() {
                 <button onClick={() => setAdminTab('alerts')} className={`flex-1 min-w-[70px] py-3 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-bold transition-all ${adminTab === 'alerts' ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}><BellRing size={14}/> تنبيهات</button>
              </div>
 
-             {/* 🌟 قسم الإحصائيات الجديد 🌟 */}
+             {/* 🌟 قسم الإحصائيات المطور بالتفاصيل 🌟 */}
              {adminTab === 'analytics' ? (
                 <div className="space-y-6 max-w-2xl mx-auto animate-in slide-in-from-right-4 pb-10">
                     
+                    {/* بطاقات الإحصائيات الرئيسية */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="bg-[#112240] p-5 rounded-3xl border border-white/5 shadow-lg flex flex-col items-center justify-center text-center">
                             <span className="text-3xl font-black text-emerald-400">{analyticsData.approvedCount}</span>
@@ -1278,8 +1332,12 @@ export default function App() {
                         </div>
                     </div>
 
-                    <div className="bg-[#112240] p-6 rounded-3xl border border-white/5 shadow-lg mt-6">
-                        <h4 className="text-sm font-black text-white mb-6 text-right border-b border-white/5 pb-3">الحجوزات حسب القسم</h4>
+                    {/* الرسم البياني الأساسي للأقسام */}
+                    <div className="bg-[#112240] p-6 rounded-[2.5rem] border border-white/5 shadow-lg mt-6">
+                        <h4 className="text-sm font-black text-white mb-6 text-right border-b border-white/5 pb-3 flex justify-between items-center">
+                            <span className="text-white/40 text-[10px]">إجمالي الطلبات: {analyticsData.totalOrders}</span>
+                            الحجوزات حسب القسم العام
+                        </h4>
                         <div className="space-y-4">
                             {CATEGORIES.map(cat => {
                                 const count = analyticsData.categoryCounts[cat.id] || 0;
@@ -1296,6 +1354,15 @@ export default function App() {
                                 );
                             })}
                         </div>
+                    </div>
+
+                    {/* 🌟 الإحصائيات التفصيلية للأقسام (الميزة الجديدة) 🌟 */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                        {renderMiniStat("السيارات الأكثر طلباً", analyticsData.carStats, Car, "لا يوجد حجوزات سيارات بعد")}
+                        {renderMiniStat("وجهات النقل البري", analyticsData.transitDestStats, MapPin, "لا يوجد رحلات نقل بري بعد")}
+                        {renderMiniStat("مركبات النقل المطلوبة", analyticsData.transitVehicleStats, CarFront, "لا يوجد رحلات نقل بري بعد")}
+                        {renderMiniStat("الفنادق الأكثر إقبالاً", analyticsData.hotelStats, Hotel, "لا يوجد حجوزات فنادق بعد")}
+                        {renderMiniStat("الخدمات الإضافية", analyticsData.serviceStats, FileCheck, "لا يوجد طلبات خدمات بعد")}
                     </div>
                 </div>
 
@@ -2152,7 +2219,7 @@ export default function App() {
                               <div className="flex justify-between text-xs border-b border-white/5 pb-2"><span className="text-white/60 font-bold">موعد الرحلة:</span> <span className="font-black">{invoicePreview.tripDate} | {invoicePreview.tripTime}</span></div>
                               
                               <div className="pt-2">
-                                  <span className="text-[10px] text-white/50 font-bold block mb-2 block text-right">الخدمات الإضافية:</span>
+                                  <span className="text-[10px] text-white/50 font-bold mb-2 block text-right">الخدمات الإضافية:</span>
                                   <div className="flex flex-wrap gap-2 justify-end">
                                       {invoicePreview.bags > 0 && <span className="bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded-lg text-[9px] font-bold border border-indigo-500/30">حقائب: {invoicePreview.bags}</span>}
                                       {invoicePreview.meal && <span className="bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded-lg text-[9px] font-bold border border-indigo-500/30">وجبة طعام</span>}
